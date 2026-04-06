@@ -1,4 +1,9 @@
-import type { CreateRelationshipDto, Relationship } from "@family-tree/shared";
+import type {
+  CreateDirectoryRelationshipDto,
+  CreateDirectoryRelationshipResponse,
+  CreateRelationshipDto,
+  Relationship,
+} from "@family-tree/shared";
 
 import { Injectable, inject } from "@angular/core";
 
@@ -16,6 +21,10 @@ export class RelationshipsService {
 
   create(payload: CreateRelationshipDto) {
     return this.api.post<Relationship>("/relationships", payload);
+  }
+
+  createWithDirectoryPerson(directoryPersonId: string, payload: CreateDirectoryRelationshipDto) {
+    return this.api.post<CreateDirectoryRelationshipResponse>(`/directory/persons/${directoryPersonId}/relationships`, payload);
   }
 
   delete(relationshipId: string) {

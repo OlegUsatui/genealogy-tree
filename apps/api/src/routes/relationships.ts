@@ -1,7 +1,18 @@
-import type { CreateRelationshipDto, SessionUser } from "@family-tree/shared";
+import type {
+  CreateDirectoryRelationshipDto,
+  CreateDirectoryRelationshipResponse,
+  CreateRelationshipDto,
+  RelationshipDirection,
+  SessionUser,
+} from "@family-tree/shared";
 
 import { getPersonById, getRelationshipById, listRelationshipsByPersonId, mapRelationshipRow, personsExist } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
+import {
+  createRelationshipForUser,
+  ensurePersonGraphImported,
+  getCanonicalPersonRowByAnyId,
+} from "../lib/person-graph";
 import { normalizeCreateRelationshipDto } from "../lib/normalize";
 import type { Env } from "../types";
 
@@ -94,6 +105,60 @@ export async function createRelationship(
   return json(mapRelationshipRow(row), { status: 201 });
 }
 
+export async function createDirectoryRelationship(
+  request: Request,
+  env: Env,
+  currentUser: SessionUser,
+  directoryPersonId: string,
+): Promise<Response> {
+  const input = normalizeCreateDirectoryRelationshipDto(await readJson<CreateDirectoryRelationshipDto>(request));
+  const localPerson = await getPersonById(env.DB, currentUser.id, input.localPersonId);
+
+  if (!localPerson) {
+    throw new HttpError(404, "Людину з вашого дерева не знайдено");
+  }
+
+  const sourcePerson = await getCanonicalPersonRowByAnyId(env.DB, directoryPersonId);
+
+  if (!sourcePerson) {
+    throw new HttpError(404, "Людину не знайдено");
+  }
+
+  const currentAccountPerson = await ensurePersonGraphImported(env.DB, sourcePerson.user_id, sourcePerson.id, currentUser.id);
+
+  if (currentAccountPerson.id === input.localPersonId) {
+    throw new HttpError(400, "Не можна створити зв’язок людини самої з собою");
+  }
+
+  const localPayload = buildRelationshipPayload(currentAccountPerson.id, input);
+  const relationship = await createRelationshipForUser(env.DB, {
+    userId: currentUser.id,
+    ...localPayload,
+  });
+
+  if (sourcePerson.user_id !== currentUser.id) {
+    const mirroredLocalPerson = await ensurePersonGraphImported(env.DB, currentUser.id, input.localPersonId, sourcePerson.user_id);
+    const mirroredPayload = buildRelationshipPayload(sourcePerson.id, {
+      ...input,
+      localPersonId: mirroredLocalPerson.id,
+    });
+
+    if (mirroredPayload.person1Id !== mirroredPayload.person2Id) {
+      await createRelationshipForUser(env.DB, {
+        userId: sourcePerson.user_id,
+        ...mirroredPayload,
+      });
+    }
+  }
+
+  const response: CreateDirectoryRelationshipResponse = {
+    person: currentAccountPerson,
+    relationship,
+  };
+
+  return json(response, { status: 201 });
+}
+
 export async function deleteRelationship(
   env: Env,
   currentUser: SessionUser,
@@ -147,4 +212,76 @@ async function findDuplicateRelationship(
     )
     .bind(currentUser.id, input.person1Id, input.person2Id)
     .first<RelationshipRow>();
+}
+
+function normalizeCreateDirectoryRelationshipDto(input: CreateDirectoryRelationshipDto): CreateDirectoryRelationshipDto & {
+  localPersonId: string;
+  direction: RelationshipDirection;
+} {
+  const localPersonId = normalizeRequiredString(input.localPersonId, "Поле localPersonId є обов’язковим");
+
+  if (input.type !== "parent_child" && input.type !== "spouse") {
+    throw new HttpError(400, "Поле type має бути або parent_child, або spouse");
+  }
+
+  const direction = input.direction ?? "current_is_parent";
+
+  if (direction !== "current_is_parent" && direction !== "current_is_child") {
+    throw new HttpError(400, "Поле direction має бути current_is_parent або current_is_child");
+  }
+
+  return {
+    type: input.type,
+    localPersonId,
+    direction,
+    startDate: normalizeOptionalString(input.startDate),
+    endDate: normalizeOptionalString(input.endDate),
+    notes: normalizeOptionalString(input.notes),
+  };
+}
+
+function buildRelationshipPayload(
+  currentPersonId: string,
+  input: CreateDirectoryRelationshipDto & { localPersonId: string; direction: RelationshipDirection },
+): CreateRelationshipDto {
+  if (input.type === "spouse") {
+    return {
+      type: "spouse",
+      person1Id: currentPersonId,
+      person2Id: input.localPersonId,
+      startDate: input.startDate ?? null,
+      endDate: input.endDate ?? null,
+      notes: input.notes ?? null,
+    };
+  }
+
+  const currentIsParent = input.direction === "current_is_parent";
+
+  return {
+    type: "parent_child",
+    person1Id: currentIsParent ? currentPersonId : input.localPersonId,
+    person2Id: currentIsParent ? input.localPersonId : currentPersonId,
+    startDate: input.startDate ?? null,
+    endDate: input.endDate ?? null,
+    notes: input.notes ?? null,
+  };
+}
+
+function normalizeRequiredString(value: unknown, errorMessage: string): string {
+  const normalized = normalizeOptionalString(value);
+
+  if (!normalized) {
+    throw new HttpError(400, errorMessage);
+  }
+
+  return normalized;
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : null;
 }

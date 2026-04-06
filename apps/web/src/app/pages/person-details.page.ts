@@ -1,4 +1,10 @@
-import type { CreateRelationshipDto, Person, Relationship } from "@family-tree/shared";
+import type {
+  CreateDirectoryRelationshipResponse,
+  CreateRelationshipDto,
+  Person,
+  Relationship,
+  RelationshipDirection,
+} from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
@@ -12,8 +18,6 @@ import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
 import { RelationshipsService } from "../services/relationships.service";
-
-type RelationshipDirection = "current_is_parent" | "current_is_child";
 
 @Component({
   standalone: true,
@@ -46,9 +50,9 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
           <div class="details-grid">
             <mat-card appearance="outlined" class="detail-item"><span>Стать</span><strong>{{ genderLabel(person.gender) }}</strong></mat-card>
             <mat-card appearance="outlined" class="detail-item"><span>Дата народження</span><strong>{{ person.birthDate || "—" }}</strong></mat-card>
-            <mat-card appearance="outlined" class="detail-item"><span>Дата смерті</span><strong>{{ person.deathDate || "—" }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item" *ngIf="person.deathDate"><span>Дата смерті</span><strong>{{ person.deathDate }}</strong></mat-card>
             <mat-card appearance="outlined" class="detail-item"><span>Місце народження</span><strong>{{ person.birthPlace || "—" }}</strong></mat-card>
-            <mat-card appearance="outlined" class="detail-item"><span>Місце смерті</span><strong>{{ person.deathPlace || "—" }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item" *ngIf="person.deathPlace"><span>Місце смерті</span><strong>{{ person.deathPlace }}</strong></mat-card>
             <mat-card appearance="outlined" class="detail-item"><span>Посилання на фото</span><strong>{{ person.photoUrl || "—" }}</strong></mat-card>
           </div>
         </mat-card>
@@ -65,9 +69,6 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
             <div class="relationship-column">
               <div class="column-heading">
                 <h3>Батьки</h3>
-                <mat-chip-set>
-                  <mat-chip>{{ parents().length }}</mat-chip>
-                </mat-chip-set>
               </div>
               <div *ngIf="parents().length > 0; else emptyParents">
                 <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of parents()">
@@ -86,9 +87,6 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
             <div class="relationship-column">
               <div class="column-heading">
                 <h3>Партнери</h3>
-                <mat-chip-set>
-                  <mat-chip>{{ spouses().length }}</mat-chip>
-                </mat-chip-set>
               </div>
               <div *ngIf="spouses().length > 0; else emptySpouses">
                 <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of spouses()">
@@ -107,9 +105,6 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
             <div class="relationship-column">
               <div class="column-heading">
                 <h3>Діти</h3>
-                <mat-chip-set>
-                  <mat-chip>{{ children().length }}</mat-chip>
-                </mat-chip-set>
               </div>
               <div *ngIf="children().length > 0; else emptyChildren">
                 <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of children()">
@@ -206,7 +201,11 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
       .profile-card,
       .relationships-card,
       .relationship-form-card {
-        padding: clamp(18px, 2.4vw, 24px);
+        padding: clamp(20px, 2.8vw, 28px);
+        border: 1px solid rgba(127, 160, 200, 0.14);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.22), transparent 42%);
       }
 
       .profile-header {
@@ -231,6 +230,10 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
         display: flex;
         flex-direction: column;
         gap: 8px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(243, 248, 255, 0.92);
+        border: 1px solid rgba(127, 160, 200, 0.14);
       }
 
       .profile-notice p {
@@ -250,14 +253,18 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
       .details-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-        gap: 12px;
+        gap: 14px;
       }
 
       .detail-item {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        padding: 16px;
+        padding: 18px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+        border-color: rgba(127, 160, 200, 0.16) !important;
       }
 
       .detail-item span {
@@ -272,13 +279,19 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
       .relationship-groups {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-        gap: 16px;
+        gap: 18px;
       }
 
       .relationship-column {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 22px;
+        border: 1px solid rgba(127, 160, 200, 0.14);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.22), transparent 42%);
       }
 
       .column-heading {
@@ -286,6 +299,7 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
         align-items: center;
         justify-content: space-between;
         gap: 10px;
+        padding-inline: 2px;
       }
 
       .relationship-column h3 {
@@ -297,7 +311,11 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        padding: 16px;
+        padding: 18px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+        border-color: rgba(127, 160, 200, 0.16) !important;
       }
 
       .relationship-row p {
@@ -495,24 +513,25 @@ export class PersonDetailsPageComponent {
 
     try {
       const value = this.relationshipForm.getRawValue();
-      const localCurrentPerson = this.isOwnProfile()
-        ? currentPerson
-        : await awaitOne<Person>(this.personsService.importDirectoryPerson(currentPerson.id));
-
-      if (localCurrentPerson.id === value.relatedPersonId) {
-        this.errorMessage.set("Не можна створити зв’язок людини самої з собою");
-        return;
-      }
-
-      const payload = buildRelationshipPayload(localCurrentPerson.id, value);
-      await awaitOne<Relationship>(this.relationshipsService.create(payload));
-      this.resetRelationshipForm();
-
       if (this.isOwnProfile()) {
+        const payload = buildRelationshipPayload(currentPerson.id, value);
+        await awaitOne<Relationship>(this.relationshipsService.create(payload));
+        this.resetRelationshipForm();
         await this.loadPage(currentPerson.id);
       } else {
-        this.snackBar.open("Зв’язок додано до вашого дерева", "Закрити", { duration: 3000 });
-        await this.router.navigate(["/persons", localCurrentPerson.id]);
+        const response = await awaitOne<CreateDirectoryRelationshipResponse>(
+          this.relationshipsService.createWithDirectoryPerson(currentPerson.id, {
+            type: value.type,
+            localPersonId: value.relatedPersonId,
+            direction: value.direction,
+            startDate: emptyToNull(value.startDate),
+            endDate: emptyToNull(value.endDate),
+            notes: emptyToNull(value.notes),
+          }),
+        );
+        this.resetRelationshipForm();
+        this.snackBar.open("Зв’язок додано до обох дерев", "Закрити", { duration: 3000 });
+        await this.router.navigate(["/persons", response.person.id]);
       }
     } catch (error) {
       this.errorMessage.set(readApiError(error));

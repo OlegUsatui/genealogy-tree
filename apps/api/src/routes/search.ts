@@ -53,7 +53,7 @@ async function queryGlobalPersonCandidates(
   const result = await env.DB.prepare(
     `
       SELECT
-        id AS source_person_id,
+        COALESCE(source_person_id, id) AS source_person_id,
         first_name,
         last_name,
         middle_name,

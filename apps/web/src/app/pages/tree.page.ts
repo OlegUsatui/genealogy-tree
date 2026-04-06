@@ -17,118 +17,135 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
   standalone: true,
   imports: [CommonModule, ...MATERIAL_IMPORTS],
   template: `
-    <section class="app-page page-stack">
-      <mat-card class="diagram-card" *ngIf="diagram() as diagram; else emptyState">
-        <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
-        <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+    <ng-container *ngIf="diagram() as diagram; else emptyState">
+      <section class="tree-page">
+        <div class="tree-hud" *ngIf="isLoading() || errorMessage()">
+          <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
+          <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+        </div>
 
-        <div class="diagram-stage">
-          <div
-            #viewport
-            class="diagram-scroll"
-            [class.is-panning]="isPanning()"
-            (wheel)="handleWheel($event)"
-            (pointerdown)="startPan($event)"
-            (pointermove)="movePan($event)"
-            (pointerup)="endPan($event)"
-            (pointercancel)="endPan($event)"
-            (pointerleave)="endPan($event)"
-          >
-            <div
-              class="diagram-canvas"
-              [style.width.px]="canvasWidth(diagram)"
-              [style.height.px]="canvasHeight(diagram)"
+        <div
+          #viewport
+          class="diagram-scroll"
+          [class.is-panning]="isPanning()"
+          (wheel)="handleWheel($event)"
+          (pointerdown)="startPan($event)"
+          (pointermove)="movePan($event)"
+          (pointerup)="endPan($event)"
+          (pointercancel)="endPan($event)"
+          (pointerleave)="endPan($event)"
+        >
+          <div class="diagram-canvas">
+            <svg
+              class="tree-svg"
+              [attr.viewBox]="diagram.viewBox"
+              [style.width.px]="diagram.width"
+              [style.height.px]="diagram.height"
+              [style.transform]="sceneTransform()"
+              preserveAspectRatio="xMidYMid meet"
             >
-              <svg
-                class="tree-svg"
-                [attr.viewBox]="diagram.viewBox"
-                preserveAspectRatio="xMidYMid meet"
+              <defs>
+                <filter id="nodeShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="rgba(48, 93, 148, 0.18)"></feDropShadow>
+                </filter>
+              </defs>
+
+              <g *ngFor="let link of diagram.links">
+                <path
+                  class="tree-link"
+                  [class.branch-link]="link.kind === 'branch'"
+                  [class.spouse-link]="link.kind === 'spouse'"
+                  [attr.d]="link.path"
+                ></path>
+              </g>
+
+              <g
+                *ngFor="let node of diagram.nodes"
+                class="tree-node-group"
+                [class.root-node]="node.role === 'root'"
+                [class.ancestor-node]="node.role === 'ancestor'"
+                [class.descendant-node]="node.role === 'descendant'"
+                [class.spouse-node]="node.role === 'spouse'"
+                [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
+                (click)="focusPerson(node.person.id)"
               >
-                <defs>
-                  <filter id="nodeShadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="rgba(48, 93, 148, 0.18)"></feDropShadow>
-                  </filter>
-                </defs>
+                <rect
+                  class="tree-node-card"
+                  [attr.width]="node.width"
+                  [attr.height]="node.height"
+                  rx="24"
+                  ry="24"
+                ></rect>
 
-                <g *ngFor="let link of diagram.links">
-                  <path
-                    class="tree-link"
-                    [class.branch-link]="link.kind === 'branch'"
-                    [class.spouse-link]="link.kind === 'spouse'"
-                    [attr.d]="link.path"
-                  ></path>
-                </g>
-
-                <g
-                  *ngFor="let node of diagram.nodes"
-                  class="tree-node-group"
-                  [class.root-node]="node.role === 'root'"
-                  [class.ancestor-node]="node.role === 'ancestor'"
-                  [class.descendant-node]="node.role === 'descendant'"
-                  [class.spouse-node]="node.role === 'spouse'"
-                  [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
-                  (click)="focusPerson(node.person.id)"
-                >
-                  <rect
-                    class="tree-node-card"
-                    [attr.width]="node.width"
-                    [attr.height]="node.height"
-                    rx="24"
-                    ry="24"
-                  ></rect>
-
-                  <text class="tree-node-badge" x="18" y="24">{{ nodeRoleLabel(node) }}</text>
-                  <text class="tree-node-title" x="18" y="46">
-                    <tspan *ngFor="let line of titleLines(node.person); let index = index" x="18" [attr.dy]="index === 0 ? 0 : 20">
-                      {{ line }}
-                    </tspan>
-                  </text>
-                  <text class="tree-node-meta" x="18" y="92">{{ labelBottom(node.person) }}</text>
-                </g>
-              </svg>
-            </div>
+                <text class="tree-node-badge" x="18" y="24">{{ nodeRoleLabel(node) }}</text>
+                <text class="tree-node-title" x="18" y="46">
+                  <tspan *ngFor="let line of titleLines(node.person); let index = index" x="18" [attr.dy]="index === 0 ? 0 : 20">
+                    {{ line }}
+                  </tspan>
+                </text>
+                <text class="tree-node-meta" x="18" y="92">{{ labelBottom(node.person) }}</text>
+              </g>
+            </svg>
           </div>
         </div>
-      </mat-card>
+      </section>
+    </ng-container>
 
-      <ng-template #emptyState>
-        <mat-card class="diagram-card">
-          <div class="empty-state">Немає достатньо даних для побудови дерева.</div>
-        </mat-card>
-      </ng-template>
-    </section>
+    <ng-template #emptyState>
+      <section class="tree-page tree-page--empty">
+        <div class="empty-state tree-empty-state">Немає достатньо даних для побудови дерева.</div>
+      </section>
+    </ng-template>
   `,
   styles: [
     `
-      .page-stack {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        max-width: min(1600px, 100%);
-        padding-top: 8px;
-        padding-bottom: 12px;
-      }
-
-      .diagram-card {
-        padding: clamp(12px, 1.8vw, 16px);
-      }
-
-      .diagram-card {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .diagram-stage {
+      .tree-page {
         position: relative;
+        width: 100%;
+        min-height: calc(100dvh - 88px);
+      }
+
+      .tree-page--empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .tree-hud {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        right: 18px;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+      }
+
+      .tree-error {
+        align-self: flex-start;
+        margin: 0;
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: rgba(255, 248, 248, 0.94);
+        border: 1px solid rgba(196, 114, 114, 0.18);
+        box-shadow: 0 10px 30px rgba(29, 38, 47, 0.08);
+      }
+
+      .tree-empty-state {
+        width: min(520px, calc(100% - 32px));
+        padding: 32px 24px;
+        border-radius: 24px;
+        background: rgba(248, 252, 255, 0.94);
+        box-shadow: var(--shadow);
       }
 
       .diagram-scroll {
         position: relative;
-        overflow: auto;
-        border-radius: 22px;
-        border: 1px solid var(--border);
-        min-height: calc(100dvh - 176px);
+        overflow: hidden;
+        width: 100%;
+        min-height: calc(100dvh - 88px);
         cursor: grab;
         touch-action: none;
         user-select: none;
@@ -170,12 +187,17 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
       .diagram-canvas {
         position: relative;
         z-index: 1;
+        width: 100%;
+        min-height: calc(100dvh - 88px);
       }
 
       .tree-svg {
+        position: absolute;
+        top: 0;
+        left: 0;
         display: block;
-        width: 100%;
-        height: 100%;
+        transform-origin: 0 0;
+        will-change: transform;
       }
 
       .tree-link {
@@ -244,9 +266,19 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
       }
 
       @media (max-width: 720px) {
+        .tree-page,
         .diagram-scroll {
-          min-height: calc(100dvh - 220px);
-          border-radius: 18px;
+          min-height: calc(100dvh - 146px);
+        }
+
+        .diagram-canvas {
+          min-height: calc(100dvh - 146px);
+        }
+
+        .tree-hud {
+          top: 14px;
+          left: 14px;
+          right: 14px;
         }
 
         .diagram-scroll::before {
@@ -275,16 +307,17 @@ export class TreePageComponent {
   readonly persons = signal<Person[]>([]);
   readonly isPanning = signal(false);
   readonly zoom = signal(1);
-  readonly minZoom = 0.55;
-  readonly maxZoom = 2.4;
+  readonly panX = signal(0);
+  readonly panY = signal(0);
+  readonly minZoom = 0.04;
+  readonly maxZoom = 10;
 
   private panState: {
     pointerId: number;
-    viewport: HTMLElement;
     startX: number;
     startY: number;
-    startScrollLeft: number;
-    startScrollTop: number;
+    startPanX: number;
+    startPanY: number;
     moved: boolean;
   } | null = null;
   private suppressNodeClick = false;
@@ -319,12 +352,8 @@ export class TreePageComponent {
     return wrapNodeTitle(this.displayName(person));
   }
 
-  canvasWidth(diagram: TreeDiagram): number {
-    return Math.max(320, Math.round(diagram.width * this.zoom()));
-  }
-
-  canvasHeight(diagram: TreeDiagram): number {
-    return Math.max(240, Math.round(diagram.height * this.zoom()));
+  sceneTransform(): string {
+    return `translate3d(${this.panX()}px, ${this.panY()}px, 0) scale(${this.zoom()})`;
   }
 
   labelBottom(person: Person): string {
@@ -368,7 +397,7 @@ export class TreePageComponent {
       return;
     }
 
-    const direction = event.deltaY > 0 ? -0.12 : 0.12;
+    const direction = event.deltaY > 0 ? 0.12 : -0.12;
     this.applyZoom(this.zoom() + direction, viewport, event.clientX, event.clientY);
   }
 
@@ -383,13 +412,16 @@ export class TreePageComponent {
       return;
     }
 
+    if (isTreeNodeTarget(event.target)) {
+      return;
+    }
+
     this.panState = {
       pointerId: event.pointerId,
-      viewport,
       startX: event.clientX,
       startY: event.clientY,
-      startScrollLeft: viewport.scrollLeft,
-      startScrollTop: viewport.scrollTop,
+      startPanX: this.panX(),
+      startPanY: this.panY(),
       moved: false,
     };
     viewport.setPointerCapture(event.pointerId);
@@ -404,8 +436,8 @@ export class TreePageComponent {
     const deltaX = event.clientX - this.panState.startX;
     const deltaY = event.clientY - this.panState.startY;
 
-    this.panState.viewport.scrollLeft = this.panState.startScrollLeft - deltaX;
-    this.panState.viewport.scrollTop = this.panState.startScrollTop - deltaY;
+    this.panX.set(this.panState.startPanX + deltaX);
+    this.panY.set(this.panState.startPanY + deltaY);
     this.panState.moved ||= Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
   }
 
@@ -414,9 +446,10 @@ export class TreePageComponent {
       return;
     }
 
-    const { viewport, pointerId, moved } = this.panState;
+    const viewport = event.currentTarget;
+    const { pointerId, moved } = this.panState;
 
-    if (viewport.hasPointerCapture(pointerId)) {
+    if (viewport instanceof HTMLElement && viewport.hasPointerCapture(pointerId)) {
       viewport.releasePointerCapture(pointerId);
     }
 
@@ -460,7 +493,10 @@ export class TreePageComponent {
       this.tree.set(tree);
       this.diagram.set(diagram);
       window.requestAnimationFrame(() => {
-        this.centerRootNode(diagram);
+        this.fitDiagramToViewport(diagram);
+        window.requestAnimationFrame(() => {
+          this.centerRootNode(diagram);
+        });
       });
     } catch (error) {
       this.errorMessage.set(readApiError(error));
@@ -480,15 +516,12 @@ export class TreePageComponent {
     const rect = viewport.getBoundingClientRect();
     const anchorViewportX = clientX === undefined ? viewport.clientWidth / 2 : clientX - rect.left;
     const anchorViewportY = clientY === undefined ? viewport.clientHeight / 2 : clientY - rect.top;
-    const anchorContentX = (viewport.scrollLeft + anchorViewportX) / currentZoom;
-    const anchorContentY = (viewport.scrollTop + anchorViewportY) / currentZoom;
+    const anchorContentX = (anchorViewportX - this.panX()) / currentZoom;
+    const anchorContentY = (anchorViewportY - this.panY()) / currentZoom;
 
     this.zoom.set(clampedZoom);
-
-    window.requestAnimationFrame(() => {
-      viewport.scrollLeft = Math.max(0, anchorContentX * clampedZoom - anchorViewportX);
-      viewport.scrollTop = Math.max(0, anchorContentY * clampedZoom - anchorViewportY);
-    });
+    this.panX.set(anchorViewportX - anchorContentX * clampedZoom);
+    this.panY.set(anchorViewportY - anchorContentY * clampedZoom);
   }
 
   private getDefaultRootPersonId(persons: Person[]): string {
@@ -499,6 +532,25 @@ export class TreePageComponent {
     }
 
     return persons[0]?.id ?? "";
+  }
+
+  private fitDiagramToViewport(diagram: TreeDiagram): void {
+    const viewport = this.viewportRef?.nativeElement;
+
+    if (!viewport || diagram.width <= 0 || diagram.height <= 0) {
+      return;
+    }
+
+    const framePadding = 48;
+    const availableWidth = Math.max(120, viewport.clientWidth - framePadding * 2);
+    const availableHeight = Math.max(120, viewport.clientHeight - framePadding * 2);
+    const widthRatio = availableWidth / diagram.width;
+    const heightRatio = availableHeight / diagram.height;
+    const fitZoom = clamp(Math.min(widthRatio, heightRatio), this.minZoom, this.maxZoom);
+
+    this.zoom.set(fitZoom);
+    this.panX.set((viewport.clientWidth - diagram.width * fitZoom) / 2);
+    this.panY.set((viewport.clientHeight - diagram.height * fitZoom) / 2);
   }
 
   private centerRootNode(diagram: TreeDiagram): void {
@@ -514,13 +566,17 @@ export class TreePageComponent {
     const rootCenterX = (rootNode.x + rootNode.width / 2 - minX) * zoom;
     const rootCenterY = (rootNode.y + rootNode.height / 2 - minY) * zoom;
 
-    viewport.scrollLeft = Math.max(0, rootCenterX - viewport.clientWidth / 2);
-    viewport.scrollTop = Math.max(0, rootCenterY - viewport.clientHeight / 2);
+    this.panX.set(viewport.clientWidth / 2 - rootCenterX);
+    this.panY.set(viewport.clientHeight / 2 - rootCenterY);
   }
 }
 
 function truncate(value: string, limit: number): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+}
+
+function isTreeNodeTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(".tree-node-group") !== null;
 }
 
 function wrapNodeTitle(value: string): string[] {

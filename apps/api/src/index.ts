@@ -10,7 +10,7 @@ import {
   importDirectoryPerson,
   updatePerson,
 } from "./routes/persons";
-import { createRelationship, deleteRelationship, getRelationships } from "./routes/relationships";
+import { createDirectoryRelationship, createRelationship, deleteRelationship, getRelationships } from "./routes/relationships";
 import { getTree } from "./routes/tree";
 import { login, logout, me } from "./routes/auth";
 import { searchPersons, searchRegistrationPersons } from "./routes/search";
@@ -108,6 +108,17 @@ async function routeRequest(
       env,
       requireAuthenticatedUser(currentUser),
       decodeURIComponent(directoryPersonImportMatch[1]),
+    );
+  }
+
+  const directoryPersonRelationshipMatch = pathname.match(/^\/api\/directory\/persons\/([^/]+)\/relationships$/);
+
+  if (directoryPersonRelationshipMatch && request.method === "POST") {
+    return createDirectoryRelationship(
+      request,
+      env,
+      requireAuthenticatedUser(currentUser),
+      decodeURIComponent(directoryPersonRelationshipMatch[1]),
     );
   }
 

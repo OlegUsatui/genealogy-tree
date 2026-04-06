@@ -270,9 +270,11 @@ import { PersonsService } from "./services/persons.service";
         flex-wrap: nowrap;
         padding: 8px 12px;
         border-radius: 18px;
-        border: 1px solid rgba(39, 44, 58, 0.08);
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 235, 0.92));
-        box-shadow: 0 10px 24px rgba(39, 44, 58, 0.06);
+        border: 1px solid rgba(127, 160, 200, 0.14);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.28), transparent 42%);
+        box-shadow: 0 10px 24px rgba(39, 44, 58, 0.05);
         text-decoration: none;
       }
 
@@ -513,16 +515,18 @@ import { PersonsService } from "./services/persons.service";
           min-height: 44px;
         }
 
-        .mobile-account-card {
-          display: flex;
-          align-items: center;
-          justify-content: flex-start;
-          gap: 12px;
-          padding: 12px;
-          border-radius: 18px;
-          border: 1px solid rgba(39, 44, 58, 0.08);
-          background: rgba(255, 255, 255, 0.78);
-        }
+      .mobile-account-card {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(127, 160, 200, 0.14);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.28), transparent 42%);
+      }
       }
 
       @media (max-width: 640px) {

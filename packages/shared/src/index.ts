@@ -2,6 +2,8 @@ export type Gender = "male" | "female" | "other" | "unknown";
 
 export type RelationshipType = "parent_child" | "spouse";
 
+export type RelationshipDirection = "current_is_parent" | "current_is_child";
+
 export interface Person {
   id: string;
   sourcePersonId?: string | null;
@@ -56,6 +58,20 @@ export interface CreateRelationshipDto {
   startDate?: string | null;
   endDate?: string | null;
   notes?: string | null;
+}
+
+export interface CreateDirectoryRelationshipDto {
+  type: RelationshipType;
+  localPersonId: string;
+  direction?: RelationshipDirection;
+  startDate?: string | null;
+  endDate?: string | null;
+  notes?: string | null;
+}
+
+export interface CreateDirectoryRelationshipResponse {
+  person: Person;
+  relationship: Relationship;
 }
 
 export interface TreeResponse {
