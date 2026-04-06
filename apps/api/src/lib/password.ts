@@ -1,4 +1,5 @@
 const encoder = new TextEncoder();
+const defaultPbkdf2Iterations = 100_000;
 
 function bufferToBase64Url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -76,8 +77,11 @@ export async function verifyPassword(password: string, passwordHash: string): Pr
   );
 }
 
-export async function hashPassword(password: string, salt: string, iterations = 310_000): Promise<string> {
+export async function hashPassword(
+  password: string,
+  salt: string,
+  iterations = defaultPbkdf2Iterations,
+): Promise<string> {
   const derivedHash = await deriveHash(password, salt, iterations);
   return `pbkdf2$${iterations}$${salt}$${bufferToBase64Url(derivedHash)}`;
 }
-

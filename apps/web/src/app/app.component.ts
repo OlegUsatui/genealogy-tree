@@ -11,8 +11,12 @@ import { AuthService } from "./services/auth.service";
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, ...MATERIAL_IMPORTS],
   template: `
     <mat-toolbar class="shell-toolbar">
-      <a mat-button routerLink="/" class="brand-link">Родинне дерево</a>
-      <span class="brand-subtitle">Простий MVP для приватного сімейного дерева</span>
+      <a mat-button routerLink="/" class="brand-link" aria-label="Родинне дерево">
+        <span class="brand-mark" aria-hidden="true">
+          <img class="brand-icon" src="/favicon.svg" alt="" width="48" height="48">
+        </span>
+        <span class="brand-wordmark">Родинне дерево</span>
+      </a>
       <span class="toolbar-spacer"></span>
 
       <nav class="shell-nav" *ngIf="auth.loaded() && auth.user(); else loginLink">
@@ -60,16 +64,43 @@ import { AuthService } from "./services/auth.service";
       }
 
       .brand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 54px;
         font-size: 26px;
         font-weight: 800;
         letter-spacing: -0.03em;
+        line-height: 1;
         text-decoration: none;
         padding-inline: 0;
       }
 
-      .brand-subtitle {
-        color: var(--muted);
-        font-size: 14px;
+      .brand-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 54px;
+        height: 54px;
+        border-radius: 18px;
+        border: 1px solid rgba(39, 44, 58, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 235, 0.92));
+        box-shadow: 0 10px 24px rgba(39, 44, 58, 0.08);
+      }
+
+      .brand-icon {
+        display: block;
+        width: 48px;
+        height: 48px;
+        flex: 0 0 auto;
+        filter: drop-shadow(0 6px 10px rgba(39, 44, 58, 0.1));
+      }
+
+      .brand-wordmark {
+        display: inline-flex;
+        align-items: center;
+        min-height: 54px;
+        white-space: nowrap;
       }
 
       .toolbar-spacer {
@@ -98,6 +129,27 @@ import { AuthService } from "./services/auth.service";
 
         .shell-nav {
           width: 100%;
+        }
+
+        .brand-link {
+          font-size: 22px;
+          gap: 4px;
+          min-height: 46px;
+        }
+
+        .brand-mark {
+          width: 46px;
+          height: 46px;
+          border-radius: 14px;
+        }
+
+        .brand-icon {
+          width: 40px;
+          height: 40px;
+        }
+
+        .brand-wordmark {
+          min-height: 46px;
         }
       }
     `,

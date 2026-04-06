@@ -92,6 +92,14 @@ a {
   border-radius: 999px !important;
 }
 
+.brand-link .mdc-button__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 54px;
+  line-height: 1;
+}
+
 .mat-toolbar {
   --mat-toolbar-container-background-color: rgba(243, 248, 255, 0.9);
   --mat-toolbar-container-text-color: var(--text);
@@ -104,5 +112,10 @@ a {
 @media (max-width: 720px) {
   .app-page {
     padding: 16px;
+  }
+
+  .brand-link .mdc-button__label {
+    gap: 4px;
+    min-height: 46px;
   }
 }

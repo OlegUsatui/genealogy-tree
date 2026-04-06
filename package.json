@@ -8,8 +8,10 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace @family-tree/web",
     "dev:api": "npm run dev --workspace @family-tree/api",
     "dev:web": "npm run dev --workspace @family-tree/web",
+    "deploy:cloudflare": "npm run build:web && npm run deploy --workspace @family-tree/api",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

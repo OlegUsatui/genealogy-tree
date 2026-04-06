@@ -1,10 +1,8 @@
-BEGIN TRANSACTION;
-
 INSERT OR IGNORE INTO users (id, email, password_hash, created_at, updated_at) VALUES
   (
     'user-admin',
     'admin@example.com',
-    'pbkdf2$310000$family-tree-admin-salt$K_Vvqojs01caCGMUvH-EXJy7qjcgu5WcPnejjAydRi0',
+    'pbkdf2$100000$family-tree-admin-salt$iJu3Xh_xX5Zg2D1wCcV9d6_Z6imdCU3NW2R8SdcSn5g',
     '2026-04-06T11:24:01Z',
     '2026-04-06T11:24:01Z'
   );
@@ -118,5 +116,3 @@ CREATE INDEX idx_relationships_user_person1_id ON relationships(user_id, person1
 CREATE INDEX idx_relationships_user_person2_id ON relationships(user_id, person2_id);
 CREATE INDEX idx_relationships_user_type ON relationships(user_id, type);
 CREATE UNIQUE INDEX idx_relationships_unique ON relationships(user_id, type, person1_id, person2_id);
-
-COMMIT;

@@ -2,7 +2,7 @@ INSERT OR REPLACE INTO users (id, email, password_hash, primary_person_id, creat
   (
     'user-admin',
     'admin@example.com',
-    'pbkdf2$310000$family-tree-admin-salt$K_Vvqojs01caCGMUvH-EXJy7qjcgu5WcPnejjAydRi0',
+    'pbkdf2$100000$family-tree-admin-salt$iJu3Xh_xX5Zg2D1wCcV9d6_Z6imdCU3NW2R8SdcSn5g',
     'person-petro-petrenko',
     '2026-04-06T11:24:01Z',
     '2026-04-06T11:24:01Z'

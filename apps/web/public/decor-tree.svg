@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="leaves" x1="45" y1="34" x2="200" y2="182" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#cfe9bb"/>
+      <stop offset="1" stop-color="#a8cf95"/>
+    </linearGradient>
+    <linearGradient id="trunk" x1="92" y1="150" x2="164" y2="226" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#efb278"/>
+      <stop offset="1" stop-color="#cc8348"/>
+    </linearGradient>
+  </defs>
+
+  <g stroke="#272c3a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path
+      d="M59 163
+      C45 163 34 151 34 137
+      C34 126 41 116 52 111
+      C45 102 45 89 51 80
+      C58 68 71 63 84 66
+      C87 50 101 38 117 38
+      C129 38 140 44 147 53
+      C156 43 170 39 183 43
+      C196 47 206 57 210 71
+      C223 68 236 73 243 84
+      C250 96 249 110 241 120
+      C250 126 255 136 255 147
+      C255 161 244 172 230 172
+      C222 172 215 170 210 166
+      C205 175 196 181 186 181
+      C174 181 164 175 159 166
+      C153 175 143 181 131 181
+      C119 181 109 175 103 166
+      C98 175 88 181 76 181
+      C66 181 57 175 52 166
+      C50 164 54 163 59 163Z"
+      fill="url(#leaves)"
+    />
+    <path
+      d="M102 157
+      C102 172 98 188 91 201
+      L84 214
+      L103 209
+      L108 223
+      L128 212
+      L147 221
+      L150 207
+      L171 210
+      L162 197
+      C156 187 152 172 152 157Z"
+      fill="url(#trunk)"
+    />
+    <path d="M129 176C121 176 114 183 114 191C114 200 121 207 129 207C138 207 145 200 145 191C145 183 138 176 129 176Z"/>
+    <path d="M130 182C125 184 123 190 126 194C128 198 133 199 137 197C140 194 140 189 137 185C135 182 132 181 130 182Z" stroke-width="4"/>
+  </g>
+
+  <g stroke="#272c3a" stroke-width="4" stroke-linecap="round">
+    <path d="M82 86C87 77 95 71 105 68"/>
+    <path d="M126 63C134 65 141 71 145 79"/>
+    <path d="M176 84C184 85 191 89 197 95"/>
+    <path d="M73 123C78 115 86 110 96 108"/>
+    <path d="M115 116C123 109 134 106 144 108"/>
+    <path d="M161 122C170 122 178 126 184 132"/>
+    <path d="M98 149C102 141 109 136 117 134"/>
+    <path d="M143 145C150 141 158 142 164 146"/>
+  </g>
+</svg>
