@@ -6,6 +6,7 @@
   "scripts": {
     "build": "wrangler deploy --dry-run",
     "dev": "wrangler dev --local --port 8787",
+    "dev:remote-db": "wrangler dev --remote --port 8787",
     "deploy": "wrangler deploy",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply family-tree --local",
@@ -20,4 +21,3 @@
     "wrangler": "^4.11.1"
   }
 }
-

@@ -9,7 +9,10 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build --workspace @family-tree/web",
+    "dev": "node ./scripts/dev.mjs --remote-db",
     "dev:api": "npm run dev --workspace @family-tree/api",
+    "dev:local-db": "node ./scripts/dev.mjs",
+    "dev:remote-db": "node ./scripts/dev.mjs --remote-db",
     "dev:web": "npm run dev --workspace @family-tree/web",
     "deploy:cloudflare": "npm run build:web && npm run deploy --workspace @family-tree/api",
     "typecheck": "npm run typecheck --workspaces --if-present"
