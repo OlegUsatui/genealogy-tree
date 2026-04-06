@@ -33,7 +33,7 @@ type LivingOption = "unknown" | "true" | "false";
         </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="form-grid">
-          <div class="field-grid">
+          <div class="field-stack">
             <mat-form-field appearance="outline">
               <mat-label>Ім’я</mat-label>
               <input matInput id="firstName" formControlName="firstName">
@@ -79,19 +79,21 @@ type LivingOption = "unknown" | "true" | "false";
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>Дата смерті</mat-label>
-              <input matInput id="deathDate" type="date" formControlName="deathDate">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
               <mat-label>Місце народження</mat-label>
               <input matInput id="birthPlace" formControlName="birthPlace">
             </mat-form-field>
 
-            <mat-form-field appearance="outline">
-              <mat-label>Місце смерті</mat-label>
-              <input matInput id="deathPlace" formControlName="deathPlace">
-            </mat-form-field>
+            <ng-container *ngIf="isMarkedDeceased()">
+              <mat-form-field appearance="outline">
+                <mat-label>Дата смерті</mat-label>
+                <input matInput id="deathDate" type="date" formControlName="deathDate">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Місце смерті</mat-label>
+                <input matInput id="deathPlace" formControlName="deathPlace">
+              </mat-form-field>
+            </ng-container>
 
             <mat-form-field appearance="outline">
               <mat-label>Посилання на фото</mat-label>
@@ -170,6 +172,12 @@ type LivingOption = "unknown" | "true" | "false";
         gap: 18px;
       }
 
+      .field-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
       .form-actions {
         display: flex;
         justify-content: flex-start;
@@ -244,6 +252,13 @@ export class PersonFormPageComponent {
   });
 
   constructor() {
+    this.form.controls.isLiving.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((value) => {
+      if (value === "true") {
+        this.form.controls.deathDate.setValue("", { emitEvent: false });
+        this.form.controls.deathPlace.setValue("", { emitEvent: false });
+      }
+    });
+
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get("id");
       this.personId.set(id);
@@ -292,6 +307,10 @@ export class PersonFormPageComponent {
     } finally {
       this.isSaving.set(false);
     }
+  }
+
+  isMarkedDeceased(): boolean {
+    return this.form.controls.isLiving.value === "false";
   }
 
   isOwnProfile(): boolean {
