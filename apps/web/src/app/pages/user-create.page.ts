@@ -27,9 +27,6 @@ type LivingOption = "unknown" | "true" | "false";
       <mat-card class="user-form-shell">
         <div class="form-header">
           <div>
-            <mat-chip-set>
-              <mat-chip>Користувачі</mat-chip>
-            </mat-chip-set>
             <h1>Новий користувач</h1>
             <p class="muted">
               Створіть обліковий запис і відразу визначте, хто ви в дереві: оберіть наявну картку або
@@ -198,7 +195,7 @@ type LivingOption = "unknown" | "true" | "false";
   styles: [
     `
       .user-form-shell {
-        padding: 24px;
+        padding: clamp(18px, 2.4vw, 24px);
       }
 
       .form-header {
@@ -211,10 +208,6 @@ type LivingOption = "unknown" | "true" | "false";
 
       .form-header h1 {
         margin: 0 0 8px;
-      }
-
-      .form-header mat-chip-set {
-        margin-bottom: 6px;
       }
 
       .header-actions {
@@ -292,14 +285,33 @@ type LivingOption = "unknown" | "true" | "false";
         justify-content: flex-start;
       }
 
-      @media (max-width: 720px) {
+      @media (max-width: 900px) {
         .form-header {
           flex-direction: column;
         }
+      }
 
+      @media (max-width: 760px) {
         .field-grid,
         .search-row {
           grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .form-header h1 {
+          font-size: 30px;
+        }
+
+        .header-actions,
+        .form-actions {
+          width: 100%;
+        }
+
+        .header-actions > .mat-mdc-button-base,
+        .form-actions > .mat-mdc-button-base {
+          width: 100%;
+          justify-content: center;
         }
       }
     `,

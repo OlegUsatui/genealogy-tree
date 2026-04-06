@@ -34,6 +34,7 @@ body {
 body {
   min-height: 100vh;
   font-family: "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
 a {
@@ -41,14 +42,14 @@ a {
 }
 
 .app-page {
-  max-width: 1200px;
+  width: min(100%, 1200px);
   margin: 0 auto;
-  padding: 24px;
+  padding: clamp(14px, 2.4vw, 24px);
 }
 
 .field-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -109,9 +110,21 @@ a {
   align-items: center;
 }
 
+.session-chip .mdc-evolution-chip__text-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 720px) {
   .app-page {
     padding: 16px;
+  }
+
+  .empty-state {
+    padding: 22px 16px;
   }
 
   .brand-link .mdc-button__label {

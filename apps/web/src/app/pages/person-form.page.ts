@@ -22,9 +22,6 @@ type LivingOption = "unknown" | "true" | "false";
       <mat-card class="form-shell">
         <div class="form-header">
           <div>
-            <mat-chip-set>
-              <mat-chip>{{ personId() ? "Редагування" : "Створення" }}</mat-chip>
-            </mat-chip-set>
             <h1>{{ personId() ? "Редагувати людину" : "Нова людина" }}</h1>
             <p class="muted">Заповніть базові дані профілю. Для MVP цього достатньо.</p>
           </div>
@@ -147,7 +144,7 @@ type LivingOption = "unknown" | "true" | "false";
   styles: [
     `
       .form-shell {
-        padding: 24px;
+        padding: clamp(18px, 2.4vw, 24px);
       }
 
       .form-header {
@@ -160,10 +157,6 @@ type LivingOption = "unknown" | "true" | "false";
 
       .form-header h1 {
         margin: 0 0 8px;
-      }
-
-      .form-header mat-chip-set {
-        margin-bottom: 6px;
       }
 
       .form-grid {
@@ -212,9 +205,26 @@ type LivingOption = "unknown" | "true" | "false";
         text-decoration: none;
       }
 
-      @media (max-width: 720px) {
+      @media (max-width: 900px) {
         .form-header {
           flex-direction: column;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .form-header h1 {
+          font-size: 30px;
+        }
+
+        .form-link,
+        .form-actions > .mat-mdc-button-base,
+        .danger-button {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .danger-button {
+          align-self: stretch;
         }
       }
     `,

@@ -104,13 +104,13 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         display: flex;
         flex-direction: column;
         gap: 10px;
-        max-width: min(1600px, calc(100vw - 12px));
-        padding-top: 12px;
-        padding-bottom: 16px;
+        max-width: min(1600px, 100%);
+        padding-top: 8px;
+        padding-bottom: 12px;
       }
 
       .diagram-card {
-        padding: 14px;
+        padding: clamp(12px, 1.8vw, 16px);
       }
 
       .diagram-card {
@@ -128,7 +128,7 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         overflow: auto;
         border-radius: 22px;
         border: 1px solid var(--border);
-        min-height: calc(100vh - 150px);
+        min-height: calc(100dvh - 176px);
         cursor: grab;
         touch-action: none;
         user-select: none;
@@ -245,7 +245,8 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
 
       @media (max-width: 720px) {
         .diagram-scroll {
-          min-height: calc(100vh - 130px);
+          min-height: calc(100dvh - 220px);
+          border-radius: 18px;
         }
 
         .diagram-scroll::before {

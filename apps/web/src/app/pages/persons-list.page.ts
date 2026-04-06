@@ -18,9 +18,6 @@ import { SearchService } from "../services/search.service";
     <section class="app-page page-stack">
       <mat-card class="section-card hero-card">
         <div class="hero-copy">
-          <mat-chip-set>
-            <mat-chip>Люди</mat-chip>
-          </mat-chip-set>
           <h1>Список людей</h1>
           <p class="muted">Створюйте профілі, знаходьте родичів і переходьте до дерева від вибраної людини.</p>
         </div>
@@ -106,23 +103,20 @@ import { SearchService } from "../services/search.service";
       }
 
       .section-card {
-        padding: 24px;
+        padding: clamp(18px, 2.2vw, 24px);
       }
 
       .hero-card {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 18px;
-      }
-
-      .hero-copy mat-chip-set {
-        margin-bottom: 6px;
+        gap: clamp(14px, 2vw, 18px);
       }
 
       .hero-card h1 {
         margin: 0 0 8px;
         font-size: clamp(34px, 4vw, 48px);
+        line-height: 0.98;
       }
 
       .section-heading {
@@ -143,7 +137,7 @@ import { SearchService } from "../services/search.service";
 
       .person-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
         gap: 16px;
       }
 
@@ -185,14 +179,39 @@ import { SearchService } from "../services/search.service";
         padding: 0 10px 10px;
       }
 
+      .card-actions > .mat-mdc-button-base {
+        min-height: 42px;
+      }
+
       .action-link {
         text-decoration: none;
       }
 
-      @media (max-width: 720px) {
-        .hero-card {
+      @media (max-width: 900px) {
+        .hero-card,
+        .section-heading {
           flex-direction: column;
           align-items: flex-start;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .hero-card {
+          gap: 12px;
+        }
+
+        .hero-card h1 {
+          font-size: 30px;
+        }
+
+        .card-actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .card-actions > .mat-mdc-button-base {
+          width: 100%;
+          justify-content: center;
         }
       }
     `,

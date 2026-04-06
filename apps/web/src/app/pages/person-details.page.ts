@@ -26,9 +26,6 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
         <mat-card class="profile-card">
           <div class="profile-header">
             <div class="profile-copy">
-              <mat-chip-set>
-                <mat-chip>Профіль</mat-chip>
-              </mat-chip-set>
               <h1>{{ displayName(person) }}</h1>
               <p class="muted">{{ person.biography || "Біографія ще не додана." }}</p>
             </div>
@@ -41,9 +38,6 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
 
             <ng-template #readOnlyProfileNotice>
               <div class="profile-notice">
-                <mat-chip-set>
-                  <mat-chip>Профіль з іншого акаунта</mat-chip>
-                </mat-chip-set>
                 <p class="muted">Щоб прив’язати цю людину до свого дерева, додай зв’язок у блоці нижче.</p>
               </div>
             </ng-template>
@@ -212,11 +206,7 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
       .profile-card,
       .relationships-card,
       .relationship-form-card {
-        padding: 24px;
-      }
-
-      .profile-copy mat-chip-set {
-        margin-bottom: 6px;
+        padding: clamp(18px, 2.4vw, 24px);
       }
 
       .profile-header {
@@ -259,7 +249,7 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
 
       .details-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
         gap: 12px;
       }
 
@@ -281,7 +271,7 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
 
       .relationship-groups {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
         gap: 16px;
       }
 
@@ -333,14 +323,39 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
         justify-content: flex-start;
       }
 
-      @media (max-width: 860px) {
+      @media (max-width: 960px) {
         .profile-header {
           flex-direction: column;
         }
+      }
+
+      @media (max-width: 860px) {
 
         .relationship-row {
           flex-direction: column;
           align-items: flex-start;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .profile-header h1 {
+          font-size: 30px;
+        }
+
+        .profile-actions,
+        .form-actions {
+          width: 100%;
+        }
+
+        .profile-actions > .mat-mdc-button-base,
+        .form-actions > .mat-mdc-button-base {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .relationship-row > .mat-mdc-button-base {
+          width: 100%;
+          justify-content: center;
         }
       }
     `,

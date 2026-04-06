@@ -15,9 +15,6 @@ import { AuthService } from "../services/auth.service";
     <section class="app-page login-page">
       <mat-card class="login-card">
         <div class="login-copy">
-          <mat-chip-set>
-            <mat-chip>MVP</mat-chip>
-          </mat-chip-set>
           <h1>Вхід до родинного дерева</h1>
           <p>
             Простий приватний інструмент для ведення сімейного дерева. Для локального старту
@@ -59,19 +56,15 @@ import { AuthService } from "../services/auth.service";
       .login-page {
         display: grid;
         place-items: center;
-        min-height: calc(100vh - 88px);
+        min-height: calc(100dvh - 124px);
       }
 
       .login-card {
         display: grid;
         grid-template-columns: minmax(260px, 1.1fr) minmax(280px, 0.9fr);
-        gap: 24px;
+        gap: clamp(18px, 2vw, 24px);
         width: min(900px, 100%);
-        padding: 28px;
-      }
-
-      .login-copy mat-chip-set {
-        margin-bottom: 6px;
+        padding: clamp(18px, 3vw, 28px);
       }
 
       .login-copy h1 {
@@ -107,6 +100,26 @@ import { AuthService } from "../services/auth.service";
       @media (max-width: 860px) {
         .login-card {
           grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .login-page {
+          min-height: auto;
+          align-items: start;
+        }
+
+        .login-card {
+          width: 100%;
+        }
+
+        .login-copy h1 {
+          font-size: 30px;
+        }
+
+        .login-form > .mat-mdc-button-base {
+          width: 100%;
+          justify-content: center;
         }
       }
     `,
