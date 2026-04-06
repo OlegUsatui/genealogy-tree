@@ -1,27 +1,7 @@
-import type { RegistrationPersonCandidate, SessionUser } from "@family-tree/shared";
+import type { PersonSearchCandidate, RegistrationPersonCandidate, SessionUser } from "@family-tree/shared";
 
-import { mapPersonRow } from "../lib/db";
 import { HttpError, json } from "../lib/http";
 import type { Env } from "../types";
-
-type PersonRow = {
-  id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string | null;
-  middle_name: string | null;
-  maiden_name: string | null;
-  gender: "male" | "female" | "other" | "unknown";
-  birth_date: string | null;
-  death_date: string | null;
-  birth_place: string | null;
-  death_place: string | null;
-  biography: string | null;
-  is_living: number | null;
-  photo_url: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 export async function searchPersons(url: URL, env: Env, currentUser: SessionUser): Promise<Response> {
   const query = url.searchParams.get("q")?.trim();
@@ -30,25 +10,13 @@ export async function searchPersons(url: URL, env: Env, currentUser: SessionUser
     throw new HttpError(400, "Параметр q є обов’язковим");
   }
 
-  const searchTerm = `%${query}%`;
-  const result = await env.DB
-    .prepare(
-      `
-        SELECT *
-        FROM persons
-        WHERE user_id = ?
-          AND (
-            first_name LIKE ?
-            OR last_name LIKE ?
-          )
-        ORDER BY COALESCE(last_name, ''), first_name
-        LIMIT 20
-      `,
-    )
-    .bind(currentUser.id, searchTerm, searchTerm)
-    .all<PersonRow>();
+  if (query.length < 3) {
+    throw new HttpError(400, "Для пошуку введіть щонайменше 3 символи");
+  }
 
-  return json(result.results.map(mapPersonRow));
+  void currentUser;
+
+  return json(await queryGlobalPersonCandidates(env, query, 20));
 }
 
 type RegistrationCandidateRow = {
@@ -70,10 +38,18 @@ export async function searchRegistrationPersons(url: URL, env: Env): Promise<Res
     throw new HttpError(400, "Параметр q є обов’язковим");
   }
 
-  if (query.length < 2) {
-    throw new HttpError(400, "Для пошуку введіть щонайменше 2 символи");
+  if (query.length < 3) {
+    throw new HttpError(400, "Для пошуку введіть щонайменше 3 символи");
   }
 
+  return json(await queryGlobalPersonCandidates(env, query, 20));
+}
+
+async function queryGlobalPersonCandidates(
+  env: Env,
+  query: string,
+  limit: number,
+): Promise<PersonSearchCandidate[]> {
   const searchTerm = `%${query}%`;
   const result = await env.DB.prepare(
     `
@@ -103,13 +79,13 @@ export async function searchRegistrationPersons(url: URL, env: Env): Promise<Res
         birth_place,
         is_living
       ORDER BY COALESCE(last_name, ''), first_name, birth_date
-      LIMIT 20
+      LIMIT ?
     `,
   )
-    .bind(searchTerm, searchTerm, searchTerm, searchTerm)
+    .bind(searchTerm, searchTerm, searchTerm, searchTerm, limit)
     .all<RegistrationCandidateRow>();
 
-  return json(result.results.map(mapRegistrationCandidateRow));
+  return result.results.map(mapRegistrationCandidateRow);
 }
 
 function mapRegistrationCandidateRow(row: RegistrationCandidateRow): RegistrationPersonCandidate {

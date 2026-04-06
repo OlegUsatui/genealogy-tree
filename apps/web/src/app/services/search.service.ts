@@ -1,4 +1,4 @@
-import type { Person } from "@family-tree/shared";
+import type { PersonSearchCandidate } from "@family-tree/shared";
 
 import { Injectable, inject } from "@angular/core";
 
@@ -11,6 +11,6 @@ export class SearchService {
   private readonly api = inject(ApiService);
 
   search(query: string) {
-    return this.api.get<Person[]>("/search", { q: query });
+    return this.api.get<PersonSearchCandidate[]>("/search", { q: query });
   }
 }

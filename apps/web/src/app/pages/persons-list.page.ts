@@ -1,4 +1,4 @@
-import type { Person } from "@family-tree/shared";
+import type { Person, PersonSearchCandidate } from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
@@ -39,6 +39,8 @@ import { SearchService } from "../services/search.service";
           >
         </mat-form-field>
 
+        <mat-progress-bar *ngIf="isSearching()" mode="indeterminate"></mat-progress-bar>
+        <p class="muted search-helper">Введіть щонайменше 3 літери. Пошук виконується по всій базі акаунтів.</p>
         <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
 
         <div *ngIf="searchQuery.trim().length > 0">
@@ -46,13 +48,10 @@ import { SearchService } from "../services/search.service";
 
           <div class="person-grid" *ngIf="searchResults().length > 0; else noSearchResults">
             <mat-card class="person-card" *ngFor="let person of searchResults()">
-              <div>
-                <h3>{{ displayName(person) }}</h3>
-                <p class="muted">{{ person.birthDate || "дата народження не вказана" }}</p>
+              <div class="person-copy">
+                <h3>{{ displaySearchName(person) }}</h3>
+                <p class="muted">{{ displaySearchMeta(person) }}</p>
               </div>
-              <mat-card-actions class="card-actions">
-                <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id]" class="action-link">Профіль</a>
-              </mat-card-actions>
             </mat-card>
           </div>
 
@@ -132,6 +131,10 @@ import { SearchService } from "../services/search.service";
         margin-bottom: 8px;
       }
 
+      .search-helper {
+        margin: 0 0 12px;
+      }
+
       .person-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -176,10 +179,13 @@ import { SearchService } from "../services/search.service";
 export class PersonsListPageComponent {
   private readonly personsService = inject(PersonsService);
   private readonly searchService = inject(SearchService);
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private latestSearchToken = 0;
 
   readonly persons = signal<Person[]>([]);
-  readonly searchResults = signal<Person[]>([]);
+  readonly searchResults = signal<PersonSearchCandidate[]>([]);
   readonly errorMessage = signal("");
+  readonly isSearching = signal(false);
 
   searchQuery = "";
 
@@ -190,22 +196,40 @@ export class PersonsListPageComponent {
   async onSearchChange(query: string): Promise<void> {
     this.searchQuery = query;
     this.errorMessage.set("");
+    this.clearSearchDebounce();
+    this.latestSearchToken += 1;
 
-    if (query.trim().length === 0) {
+    const normalizedQuery = query.trim();
+
+    if (normalizedQuery.length === 0) {
       this.searchResults.set([]);
+      this.isSearching.set(false);
       return;
     }
 
-    try {
-      const results = await awaitOne<Person[]>(this.searchService.search(query.trim()));
-      this.searchResults.set(results);
-    } catch (error) {
-      this.errorMessage.set(readApiError(error));
+    if (normalizedQuery.length < 3) {
+      this.searchResults.set([]);
+      this.isSearching.set(false);
+      return;
     }
+
+    const searchToken = this.latestSearchToken;
+    this.isSearching.set(true);
+    this.searchDebounceTimer = setTimeout(() => {
+      void this.fetchSearchResults(normalizedQuery, searchToken);
+    }, 250);
   }
 
   displayName(person: Person): string {
     return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+  }
+
+  displaySearchName(person: PersonSearchCandidate): string {
+    return [person.lastName, person.firstName, person.middleName].filter(Boolean).join(" ");
+  }
+
+  displaySearchMeta(person: PersonSearchCandidate): string {
+    return [person.birthDate, person.birthPlace].filter(Boolean).join(" • ") || "Дата та місто народження не вказані";
   }
 
   private async loadPersons(): Promise<void> {
@@ -213,6 +237,36 @@ export class PersonsListPageComponent {
       this.persons.set(await awaitOne<Person[]>(this.personsService.list()));
     } catch (error) {
       this.errorMessage.set(readApiError(error));
+    }
+  }
+
+  private async fetchSearchResults(query: string, searchToken: number): Promise<void> {
+    try {
+      const results = await awaitOne<PersonSearchCandidate[]>(this.searchService.search(query));
+
+      if (searchToken !== this.latestSearchToken) {
+        return;
+      }
+
+      this.searchResults.set(results);
+    } catch (error) {
+      if (searchToken !== this.latestSearchToken) {
+        return;
+      }
+
+      this.errorMessage.set(readApiError(error));
+      this.searchResults.set([]);
+    } finally {
+      if (searchToken === this.latestSearchToken) {
+        this.isSearching.set(false);
+      }
+    }
+  }
+
+  private clearSearchDebounce(): void {
+    if (this.searchDebounceTimer !== null) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = null;
     }
   }
 }

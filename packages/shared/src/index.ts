@@ -82,6 +82,18 @@ export interface RegistrationPersonCandidate {
   isLiving: boolean | null;
 }
 
+export interface PersonSearchCandidate {
+  sourcePersonId: string;
+  firstName: string;
+  lastName: string | null;
+  middleName: string | null;
+  maidenName: string | null;
+  gender: Gender;
+  birthDate: string | null;
+  birthPlace: string | null;
+  isLiving: boolean | null;
+}
+
 export interface CreateUserDto {
   email: string;
   password: string;

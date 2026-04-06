@@ -85,42 +85,35 @@ type LivingOption = "unknown" | "true" | "false";
             </mat-form-field>
 
             <ng-container *ngIf="isExistingMode(); else createPersonFields">
-              <div class="search-row">
-                <mat-form-field appearance="outline" class="field-wide">
-                  <mat-label>Пошук себе у списку</mat-label>
-                  <input
-                    matInput
-                    formControlName="searchQuery"
-                    placeholder="Наприклад: Петро Петренко"
-                  >
-                </mat-form-field>
-
-                <button
-                  mat-stroked-button
-                  color="primary"
-                  type="button"
-                  class="search-button"
-                  [disabled]="isSearching()"
-                  (click)="searchExistingPerson()"
+              <mat-form-field appearance="outline" class="field-wide">
+                <mat-label>Пошук себе у загальній базі</mat-label>
+                <input
+                  matInput
+                  formControlName="searchQuery"
+                  placeholder="Почніть вводити прізвище або ім’я"
+                  [matAutocomplete]="personAutocomplete"
                 >
-                  {{ isSearching() ? "Пошук..." : "Знайти" }}
-                </button>
-              </div>
+                <mat-autocomplete
+                  #personAutocomplete="matAutocomplete"
+                  [displayWith]="displaySelectedCandidate"
+                  (optionSelected)="selectCandidate($event.option.value)"
+                >
+                  <mat-option *ngFor="let candidate of searchResults()" [value]="candidate">
+                    <div class="candidate-option">
+                      <span class="candidate-title">{{ candidateHeadline(candidate) }}</span>
+                      <span class="candidate-meta">{{ candidateDetails(candidate) }}</span>
+                    </div>
+                  </mat-option>
+                </mat-autocomplete>
+              </mat-form-field>
 
               <mat-progress-bar *ngIf="isSearching()" mode="indeterminate"></mat-progress-bar>
 
               <p class="muted helper-text">
-                Пошук показує короткий список збігів. Якщо знайдете себе, ця картка буде скопійована у ваш акаунт.
+                Введіть щонайменше 3 літери. Пошук виконується на бекенді по всій базі людей.
               </p>
 
-              <mat-form-field appearance="outline" *ngIf="searchResults().length > 0">
-                <mat-label>Оберіть себе зі списку</mat-label>
-                <mat-select formControlName="existingPersonId">
-                  <mat-option *ngFor="let candidate of searchResults()" [value]="candidate.sourcePersonId">
-                    {{ displayCandidate(candidate) }}
-                  </mat-option>
-                </mat-select>
-              </mat-form-field>
+              <p class="error-text" *ngIf="searchErrorMessage()">{{ searchErrorMessage() }}</p>
 
               <p class="muted helper-text" *ngIf="hasSearched() && !isSearching() && searchResults().length === 0">
                 Збігів не знайдено. Перемкніться на створення нової картки і введіть свої дані вручну.
@@ -273,6 +266,23 @@ type LivingOption = "unknown" | "true" | "false";
         min-height: 56px;
       }
 
+      .candidate-option {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding-block: 4px;
+      }
+
+      .candidate-title {
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .candidate-meta {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
       .helper-text {
         margin: 0;
       }
@@ -299,11 +309,14 @@ export class UserCreatePageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly usersService = inject(UsersService);
   private readonly router = inject(Router);
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private latestSearchToken = 0;
 
   readonly isSaving = signal(false);
   readonly isSearching = signal(false);
   readonly hasSearched = signal(false);
   readonly errorMessage = signal("");
+  readonly searchErrorMessage = signal("");
   readonly searchResults = signal<RegistrationPersonCandidate[]>([]);
 
   readonly form = new FormGroup({
@@ -322,7 +335,7 @@ export class UserCreatePageComponent {
     personMode: new FormControl<RegistrationPersonMode>("new", {
       nonNullable: true,
     }),
-    searchQuery: new FormControl("", { nonNullable: true }),
+    searchQuery: new FormControl<string | RegistrationPersonCandidate>("", { nonNullable: true }),
     existingPersonId: new FormControl("", { nonNullable: true }),
     firstName: new FormControl("", { nonNullable: true }),
     lastName: new FormControl("", { nonNullable: true }),
@@ -342,14 +355,37 @@ export class UserCreatePageComponent {
       this.applyPersonMode(mode);
     });
 
-    this.form.controls.searchQuery.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+    this.form.controls.searchQuery.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((value) => {
       if (!this.isExistingMode()) {
         return;
       }
 
-      this.hasSearched.set(false);
-      this.searchResults.set([]);
+      if (typeof value !== "string") {
+        this.searchErrorMessage.set("");
+        this.isSearching.set(false);
+        return;
+      }
+
+      const query = value.trim();
+      this.clearSearchDebounce();
+      this.latestSearchToken += 1;
+      this.searchErrorMessage.set("");
       this.form.controls.existingPersonId.setValue("", { emitEvent: false });
+
+      if (query.length < 3) {
+        this.hasSearched.set(false);
+        this.searchResults.set([]);
+        this.isSearching.set(false);
+        return;
+      }
+
+      const searchToken = this.latestSearchToken;
+      this.hasSearched.set(true);
+      this.isSearching.set(true);
+      this.searchResults.set([]);
+      this.searchDebounceTimer = setTimeout(() => {
+        void this.fetchSearchResults(query, searchToken);
+      }, 250);
     });
   }
 
@@ -372,43 +408,27 @@ export class UserCreatePageComponent {
     return this.isExistingMode() && control.invalid && (control.touched || control.dirty);
   }
 
-  displayCandidate(candidate: RegistrationPersonCandidate): string {
-    const name = [candidate.firstName, candidate.middleName, candidate.lastName].filter(Boolean).join(" ");
-    const details = [
-      candidate.birthDate,
-      candidate.birthPlace,
-      candidate.isLiving === null ? null : candidate.isLiving ? "живий / жива" : "помер / померла",
-    ].filter(Boolean);
+  displaySelectedCandidate = (candidate: RegistrationPersonCandidate | string | null): string => {
+    if (!candidate) {
+      return "";
+    }
 
-    return details.length > 0 ? `${name} • ${details.join(" • ")}` : name;
+    return typeof candidate === "string" ? candidate : this.candidateHeadline(candidate);
+  };
+
+  candidateHeadline(candidate: RegistrationPersonCandidate): string {
+    return [candidate.lastName, candidate.firstName, candidate.middleName].filter(Boolean).join(" ");
   }
 
-  async searchExistingPerson(): Promise<void> {
-    const query = this.form.controls.searchQuery.value.trim();
+  candidateDetails(candidate: RegistrationPersonCandidate): string {
+    const details = [candidate.birthDate, candidate.birthPlace].filter(Boolean);
+    return details.length > 0 ? details.join(" • ") : "Дата та місто народження не вказані";
+  }
 
-    if (query.length < 2) {
-      this.errorMessage.set("Для пошуку введіть щонайменше 2 символи");
-      this.searchResults.set([]);
-      this.hasSearched.set(false);
-      return;
-    }
-
-    this.isSearching.set(true);
-    this.errorMessage.set("");
-    this.hasSearched.set(true);
-    this.searchResults.set([]);
-    this.form.controls.existingPersonId.setValue("", { emitEvent: false });
-
-    try {
-      const results = await awaitOne<RegistrationPersonCandidate[]>(
-        this.usersService.searchRegistrationCandidates(query),
-      );
-      this.searchResults.set(results);
-    } catch (error) {
-      this.errorMessage.set(readApiError(error));
-    } finally {
-      this.isSearching.set(false);
-    }
+  selectCandidate(candidate: RegistrationPersonCandidate): void {
+    this.form.controls.searchQuery.setValue(candidate, { emitEvent: false });
+    this.form.controls.existingPersonId.setValue(candidate.sourcePersonId);
+    this.searchErrorMessage.set("");
   }
 
   async submit(): Promise<void> {
@@ -444,9 +464,13 @@ export class UserCreatePageComponent {
       this.form.controls.existingPersonId.setValidators([Validators.required]);
       this.form.controls.firstName.clearValidators();
     } else {
+      this.clearSearchDebounce();
+      this.latestSearchToken += 1;
+      this.isSearching.set(false);
       this.form.controls.existingPersonId.clearValidators();
       this.form.controls.firstName.setValidators([Validators.required]);
       this.hasSearched.set(false);
+      this.searchErrorMessage.set("");
       this.searchResults.set([]);
       this.form.controls.searchQuery.setValue("", { emitEvent: false });
       this.form.controls.existingPersonId.setValue("", { emitEvent: false });
@@ -455,6 +479,38 @@ export class UserCreatePageComponent {
     this.form.controls.existingPersonId.updateValueAndValidity({ emitEvent: false });
     this.form.controls.firstName.updateValueAndValidity({ emitEvent: false });
   }
+
+  private async fetchSearchResults(query: string, searchToken: number): Promise<void> {
+    try {
+      const results = await awaitOne<RegistrationPersonCandidate[]>(
+        this.usersService.searchRegistrationCandidates(query),
+      );
+
+      if (searchToken !== this.latestSearchToken) {
+        return;
+      }
+
+      this.searchResults.set(results);
+    } catch (error) {
+      if (searchToken !== this.latestSearchToken) {
+        return;
+      }
+
+      this.searchResults.set([]);
+      this.searchErrorMessage.set(readSearchError(error));
+    } finally {
+      if (searchToken === this.latestSearchToken) {
+        this.isSearching.set(false);
+      }
+    }
+  }
+
+  private clearSearchDebounce(): void {
+    if (this.searchDebounceTimer !== null) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = null;
+    }
+  }
 }
 
 function toCreateUserPayload(value: {
@@ -462,7 +518,7 @@ function toCreateUserPayload(value: {
   password: string;
   confirmPassword: string;
   personMode: RegistrationPersonMode;
-  searchQuery: string;
+  searchQuery: string | RegistrationPersonCandidate;
   existingPersonId: string;
   firstName: string;
   lastName: string;
@@ -510,4 +566,12 @@ function readApiError(error: unknown): string {
   }
 
   return "Не вдалося створити користувача";
+}
+
+function readSearchError(error: unknown): string {
+  if (error instanceof HttpErrorResponse) {
+    return error.error?.error ?? "Не вдалося виконати пошук";
+  }
+
+  return "Не вдалося виконати пошук";
 }
