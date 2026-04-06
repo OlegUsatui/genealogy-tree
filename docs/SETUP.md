@@ -1,4 +1,4 @@
-# Family Tree MVP
+# MVP родинного дерева
 
 ## Що вже зроблено
 
@@ -32,8 +32,8 @@
 - D1:
   - schema migration
   - seed SQL
-  - demo persons
-  - demo relationships
+  - розширені demo persons
+  - розширені demo relationships
   - admin user
 - Angular frontend:
   - `/login`
@@ -74,6 +74,8 @@ npm run db:migrate:local --workspace @family-tree/api
 npm run db:seed:local --workspace @family-tree/api
 ```
 
+`seed.sql` тепер містить більшу демо-родину з кількома поколіннями, sibling-гілками та кількома шлюбами. Вставки виконуються через `INSERT OR REPLACE`, тому seed зручно проганяти повторно під час локального тестування.
+
 ### 4. Запустити backend
 
 ```bash
@@ -90,9 +92,9 @@ npm run dev --workspace @family-tree/web
 
 Web буде доступний на `http://localhost:4200`.
 
-## Seed доступ
+## Доступ до тестового користувача
 
-- Email: `admin@example.com`
+- Електронна пошта: `admin@example.com`
 - Password: `admin12345`
 
 ## Важливо для deploy

@@ -20,7 +20,7 @@ export async function getRelationships(url: URL, env: Env): Promise<Response> {
   const personId = url.searchParams.get("personId")?.trim();
 
   if (!personId) {
-    throw new HttpError(400, "personId query parameter is required");
+    throw new HttpError(400, "Параметр personId є обов’язковим");
   }
 
   const relationships = await listRelationshipsByPersonId(env.DB, personId);
@@ -31,13 +31,13 @@ export async function createRelationship(request: Request, env: Env): Promise<Re
   const input = normalizeCreateRelationshipDto(await readJson<CreateRelationshipDto>(request));
 
   if (!(await personsExist(env.DB, [input.person1Id, input.person2Id]))) {
-    throw new HttpError(404, "One or more persons do not exist");
+    throw new HttpError(404, "Одну або кілька людей не знайдено");
   }
 
   const duplicate = await findDuplicateRelationship(env, input);
 
   if (duplicate) {
-    throw new HttpError(409, "Relationship already exists");
+    throw new HttpError(409, "Такий зв’язок уже існує");
   }
 
   const relationshipId = crypto.randomUUID();
@@ -75,7 +75,7 @@ export async function createRelationship(request: Request, env: Env): Promise<Re
     .first<RelationshipRow>();
 
   if (!row) {
-    throw new HttpError(500, "Failed to create relationship");
+    throw new HttpError(500, "Не вдалося створити зв’язок");
   }
 
   return json(mapRelationshipRow(row), { status: 201 });
@@ -85,7 +85,7 @@ export async function deleteRelationship(env: Env, relationshipId: string): Prom
   const existing = await getRelationshipById(env.DB, relationshipId);
 
   if (!existing) {
-    throw new HttpError(404, "Relationship not found");
+    throw new HttpError(404, "Зв’язок не знайдено");
   }
 
   await env.DB.prepare("DELETE FROM relationships WHERE id = ?").bind(relationshipId).run();
@@ -128,4 +128,3 @@ async function findDuplicateRelationship(
     .bind(input.person1Id, input.person2Id)
     .first<RelationshipRow>();
 }
-

@@ -4,46 +4,49 @@ import { Component, inject, signal } from "@angular/core";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 
+import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 
 @Component({
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, ...MATERIAL_IMPORTS],
   template: `
     <section class="app-page login-page">
-      <div class="login-card card">
+      <mat-card class="login-card">
         <div class="login-copy">
-          <span class="chip">MVP</span>
-          <h1>Вхід до Family Tree</h1>
+          <mat-chip-set>
+            <mat-chip>MVP</mat-chip>
+          </mat-chip-set>
+          <h1>Вхід до родинного дерева</h1>
           <p>
             Простий приватний інструмент для ведення сімейного дерева. Для локального старту
-            використовуйте seed-користувача.
+            використовуйте тестового користувача.
           </p>
         </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="login-form">
-          <div class="field">
-            <label for="email">Email</label>
-            <input id="email" type="email" formControlName="email">
-          </div>
+          <mat-form-field appearance="outline">
+            <mat-label>Електронна пошта</mat-label>
+            <input matInput id="email" type="email" formControlName="email">
+          </mat-form-field>
 
-          <div class="field">
-            <label for="password">Пароль</label>
-            <input id="password" type="password" formControlName="password">
-          </div>
+          <mat-form-field appearance="outline">
+            <mat-label>Пароль</mat-label>
+            <input matInput id="password" type="password" formControlName="password">
+          </mat-form-field>
 
           <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
 
-          <button class="btn btn-primary" type="submit" [disabled]="form.invalid || isSubmitting()">
+          <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || isSubmitting()">
             {{ isSubmitting() ? "Вхід..." : "Увійти" }}
           </button>
 
-          <div class="seed-hint">
-            <strong>Seed login:</strong>
+          <mat-card class="seed-hint" appearance="outlined">
+            <strong>Тестовий вхід:</strong>
             <span><code>admin&#64;example.com</code> / <code>admin12345</code></span>
-          </div>
+          </mat-card>
         </form>
-      </div>
+      </mat-card>
     </section>
   `,
   styles: [
@@ -62,8 +65,12 @@ import { AuthService } from "../services/auth.service";
         padding: 28px;
       }
 
+      .login-copy mat-chip-set {
+        margin-bottom: 6px;
+      }
+
       .login-copy h1 {
-        margin: 14px 0 10px;
+        margin: 0 0 10px;
         font-size: clamp(34px, 4vw, 52px);
         line-height: 0.96;
       }
@@ -77,10 +84,7 @@ import { AuthService } from "../services/auth.service";
         display: flex;
         flex-direction: column;
         gap: 16px;
-        background: rgba(255, 255, 255, 0.65);
-        border: 1px solid var(--border);
         border-radius: 22px;
-        padding: 22px;
       }
 
       .seed-hint {
@@ -88,8 +92,6 @@ import { AuthService } from "../services/auth.service";
         flex-direction: column;
         gap: 6px;
         padding: 14px;
-        border-radius: 16px;
-        background: rgba(45, 34, 21, 0.06);
         color: var(--muted);
       }
 
@@ -131,7 +133,7 @@ export class LoginPageComponent {
 
     try {
       await this.authService.login(this.form.getRawValue());
-      const redirect = this.route.snapshot.queryParamMap.get("redirect") ?? "/persons";
+      const redirect = this.route.snapshot.queryParamMap.get("redirect") ?? "/";
       await this.router.navigateByUrl(redirect);
     } catch (error) {
       this.errorMessage.set(readApiError(error));

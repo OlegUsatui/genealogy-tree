@@ -17,7 +17,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
   const password = body.password ?? "";
 
   if (!email || !password) {
-    throw new HttpError(400, "email and password are required");
+    throw new HttpError(400, "Поля email і password є обов’язковими");
   }
 
   const user = await env.DB.prepare(
@@ -27,7 +27,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
     .first<UserRow>();
 
   if (!user || !(await verifyPassword(password, user.password_hash))) {
-    throw new HttpError(401, "Invalid credentials");
+    throw new HttpError(401, "Невірний email або пароль");
   }
 
   const sessionUser: SessionUser = {
@@ -69,4 +69,3 @@ export async function me(request: Request, env: Env): Promise<Response> {
     user,
   });
 }
-

@@ -24,7 +24,7 @@ export async function searchPersons(url: URL, env: Env): Promise<Response> {
   const query = url.searchParams.get("q")?.trim();
 
   if (!query) {
-    throw new HttpError(400, "q query parameter is required");
+    throw new HttpError(400, "Параметр q є обов’язковим");
   }
 
   const searchTerm = `%${query}%`;
@@ -44,4 +44,3 @@ export async function searchPersons(url: URL, env: Env): Promise<Response> {
 
   return json(result.results.map(mapPersonRow));
 }
-

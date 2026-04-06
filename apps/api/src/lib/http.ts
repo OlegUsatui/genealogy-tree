@@ -35,7 +35,7 @@ export function errorResponse(error: unknown): Response {
     );
   }
 
-  const message = error instanceof Error ? error.message : "Unexpected server error";
+  const message = error instanceof Error ? error.message : "Непередбачена помилка сервера";
   return json(
     {
       error: message,
@@ -48,7 +48,7 @@ export async function readJson<T>(request: Request): Promise<T> {
   try {
     return (await request.json()) as T;
   } catch {
-    throw new HttpError(400, "Invalid JSON body");
+    throw new HttpError(400, "Некоректне JSON-тіло запиту");
   }
 }
 
@@ -74,4 +74,3 @@ export function applyCors(request: Request, response: Response): Response {
 export function handleOptions(request: Request): Response {
   return applyCors(request, noContent());
 }
-

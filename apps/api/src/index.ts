@@ -25,14 +25,14 @@ export default {
       const pathname = url.pathname.replace(/\/+$/, "") || "/";
 
       if (!env.SESSION_SECRET) {
-        throw new HttpError(500, "SESSION_SECRET is not configured");
+        throw new HttpError(500, "SESSION_SECRET не налаштований");
       }
 
       if (requiresAuth(pathname)) {
         const user = await readSessionUser(request, env);
 
         if (!user) {
-          throw new HttpError(401, "Unauthorized");
+          throw new HttpError(401, "Потрібна авторизація");
         }
       }
 
@@ -116,7 +116,7 @@ async function routeRequest(
     return getTree(url, env, decodeURIComponent(treeMatch[1]));
   }
 
-  throw new HttpError(404, "Route not found");
+  throw new HttpError(404, "Маршрут не знайдено");
 }
 
 function requiresAuth(pathname: string): boolean {

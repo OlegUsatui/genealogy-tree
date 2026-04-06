@@ -11,8 +11,8 @@ import { TreePageComponent } from "./pages/tree.page";
 export const routes: Routes = [
   {
     path: "",
-    pathMatch: "full",
-    redirectTo: "persons",
+    component: TreePageComponent,
+    canActivate: [authGuard],
   },
   {
     path: "login",
@@ -44,5 +44,9 @@ export const routes: Routes = [
     component: TreePageComponent,
     canActivate: [authGuard],
   },
+  {
+    path: "tree",
+    component: TreePageComponent,
+    canActivate: [authGuard],
+  },
 ];
-

@@ -6,37 +6,38 @@ import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 
+import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
 import { SearchService } from "../services/search.service";
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
     <section class="app-page page-stack">
-      <section class="card section-card hero-card">
-        <div>
-          <span class="chip">Люди</span>
+      <mat-card class="section-card hero-card">
+        <div class="hero-copy">
+          <mat-chip-set>
+            <mat-chip>Люди</mat-chip>
+          </mat-chip-set>
           <h1>Список людей</h1>
           <p class="muted">Створюйте профілі, знаходьте родичів і переходьте до дерева від вибраної людини.</p>
         </div>
+        <a mat-flat-button color="primary" routerLink="/persons/new" class="action-link">Додати людину</a>
+      </mat-card>
 
-        <a routerLink="/persons/new" class="btn btn-primary action-link">Додати людину</a>
-      </section>
-
-      <section class="card section-card">
-        <div class="search-row">
-          <div class="field">
-            <label for="search">Пошук по імені або прізвищу</label>
-            <input
-              id="search"
-              [(ngModel)]="searchQuery"
-              (ngModelChange)="onSearchChange($event)"
-              placeholder="Наприклад, Петренко"
-            >
-          </div>
-        </div>
+      <mat-card class="section-card">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Пошук по імені або прізвищу</mat-label>
+          <input
+            matInput
+            id="search"
+            [(ngModel)]="searchQuery"
+            (ngModelChange)="onSearchChange($event)"
+            placeholder="Наприклад, Петренко"
+          >
+        </mat-form-field>
 
         <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
 
@@ -44,31 +45,33 @@ import { SearchService } from "../services/search.service";
           <h2>Результати пошуку</h2>
 
           <div class="person-grid" *ngIf="searchResults().length > 0; else noSearchResults">
-            <article class="person-card" *ngFor="let person of searchResults()">
+            <mat-card class="person-card" *ngFor="let person of searchResults()">
               <div>
                 <h3>{{ displayName(person) }}</h3>
                 <p class="muted">{{ person.birthDate || "дата народження не вказана" }}</p>
               </div>
-              <div class="card-actions">
-                <a [routerLink]="['/persons', person.id]" class="btn btn-secondary action-link">Профіль</a>
-              </div>
-            </article>
+              <mat-card-actions class="card-actions">
+                <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id]" class="action-link">Профіль</a>
+              </mat-card-actions>
+            </mat-card>
           </div>
 
           <ng-template #noSearchResults>
             <div class="empty-state">Нічого не знайдено.</div>
           </ng-template>
         </div>
-      </section>
+      </mat-card>
 
-      <section class="card section-card">
+      <mat-card class="section-card">
         <div class="section-heading">
           <h2>Усі люди</h2>
-          <span class="muted">{{ persons().length }} записів</span>
+          <mat-chip-set>
+            <mat-chip>{{ persons().length }} записів</mat-chip>
+          </mat-chip-set>
         </div>
 
         <div class="person-grid" *ngIf="persons().length > 0; else noPersons">
-          <article class="person-card" *ngFor="let person of persons()">
+          <mat-card class="person-card" *ngFor="let person of persons()">
             <div class="person-copy">
               <h3>{{ displayName(person) }}</h3>
               <p class="muted">
@@ -76,17 +79,17 @@ import { SearchService } from "../services/search.service";
               </p>
             </div>
 
-            <div class="card-actions">
-              <a [routerLink]="['/persons', person.id]" class="btn btn-secondary action-link">Профіль</a>
-              <a [routerLink]="['/tree', person.id]" class="btn btn-secondary action-link">Дерево</a>
-            </div>
-          </article>
+            <mat-card-actions class="card-actions">
+              <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id]" class="action-link">Профіль</a>
+              <a mat-button [routerLink]="['/tree', person.id]" class="action-link">Дерево</a>
+            </mat-card-actions>
+          </mat-card>
         </div>
 
         <ng-template #noPersons>
           <div class="empty-state">Список порожній. Створіть першу людину.</div>
         </ng-template>
-      </section>
+      </mat-card>
     </section>
   `,
   styles: [
@@ -108,8 +111,12 @@ import { SearchService } from "../services/search.service";
         gap: 18px;
       }
 
+      .hero-copy mat-chip-set {
+        margin-bottom: 6px;
+      }
+
       .hero-card h1 {
-        margin: 12px 0 8px;
+        margin: 0 0 8px;
         font-size: clamp(34px, 4vw, 48px);
       }
 
@@ -121,9 +128,8 @@ import { SearchService } from "../services/search.service";
         margin-bottom: 14px;
       }
 
-      .search-row {
-        display: grid;
-        gap: 16px;
+      .search-field {
+        margin-bottom: 8px;
       }
 
       .person-grid {
@@ -136,10 +142,7 @@ import { SearchService } from "../services/search.service";
         display: flex;
         flex-direction: column;
         gap: 14px;
-        padding: 18px;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid var(--border);
+        padding: 6px;
       }
 
       .person-card h3 {
@@ -154,6 +157,7 @@ import { SearchService } from "../services/search.service";
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+        padding: 0 10px 10px;
       }
 
       .action-link {

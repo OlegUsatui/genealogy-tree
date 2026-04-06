@@ -14,7 +14,7 @@ export async function getTree(url: URL, env: Env, personId: string): Promise<Res
   const rootPerson = await getPersonById(env.DB, personId);
 
   if (!rootPerson) {
-    throw new HttpError(404, "Person not found");
+    throw new HttpError(404, "Людину не знайдено");
   }
 
   const upDepth = clampDepth(url.searchParams.get("up"));
@@ -80,9 +80,8 @@ function clampDepth(value: string | null): number {
   const parsed = Number.parseInt(value, 10);
 
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new HttpError(400, "up and down must be integers greater than or equal to 0");
+    throw new HttpError(400, "Параметри up і down мають бути цілими числами, не меншими за 0");
   }
 
   return Math.min(parsed, 5);
 }
-

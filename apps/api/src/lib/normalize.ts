@@ -19,7 +19,7 @@ function normalizeGender(value: unknown): Gender {
   }
 
   if (typeof value !== "string" || !allowedGenders.includes(value as Gender)) {
-    throw new HttpError(400, "gender must be one of: male, female, other, unknown");
+    throw new HttpError(400, "Поле gender має бути одним зі значень: male, female, other, unknown");
   }
 
   return value as Gender;
@@ -31,7 +31,7 @@ function normalizeIsLiving(value: unknown): boolean | null {
   }
 
   if (typeof value !== "boolean") {
-    throw new HttpError(400, "isLiving must be a boolean or null");
+    throw new HttpError(400, "Поле isLiving має бути boolean або null");
   }
 
   return value;
@@ -56,7 +56,7 @@ export function normalizeCreatePersonDto(input: CreatePersonDto): NormalizedPers
   const firstName = normalizeOptionalString(input.firstName);
 
   if (!firstName) {
-    throw new HttpError(400, "firstName is required");
+    throw new HttpError(400, "Поле firstName є обов’язковим");
   }
 
   return {
@@ -82,7 +82,7 @@ export function normalizeUpdatePersonDto(input: UpdatePersonDto): Partial<Normal
     const firstName = normalizeOptionalString(input.firstName);
 
     if (!firstName) {
-      throw new HttpError(400, "firstName cannot be empty");
+      throw new HttpError(400, "Поле firstName не може бути порожнім");
     }
 
     result.firstName = firstName;
@@ -141,15 +141,15 @@ export function normalizeCreateRelationshipDto(input: CreateRelationshipDto): Cr
   const person2Id = normalizeOptionalString(input.person2Id);
 
   if (type !== "parent_child" && type !== "spouse") {
-    throw new HttpError(400, "type must be either parent_child or spouse");
+    throw new HttpError(400, "Поле type має бути або parent_child, або spouse");
   }
 
   if (!person1Id || !person2Id) {
-    throw new HttpError(400, "person1Id and person2Id are required");
+    throw new HttpError(400, "Поля person1Id і person2Id є обов’язковими");
   }
 
   if (person1Id === person2Id) {
-    throw new HttpError(400, "person1Id and person2Id must be different");
+    throw new HttpError(400, "person1Id і person2Id мають бути різними");
   }
 
   return {
@@ -169,4 +169,3 @@ export function toDbBoolean(value: boolean | null): number | null {
 
   return value ? 1 : 0;
 }
-

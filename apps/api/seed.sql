@@ -1,4 +1,4 @@
-INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES
+INSERT OR REPLACE INTO users (id, email, password_hash, created_at, updated_at) VALUES
   (
     'user-admin',
     'admin@example.com',
@@ -7,7 +7,57 @@ INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES
     '2026-04-06T11:24:01Z'
   );
 
-INSERT INTO persons (id, first_name, last_name, middle_name, maiden_name, gender, birth_date, death_date, birth_place, death_place, biography, is_living, photo_url, created_at, updated_at) VALUES
+INSERT OR REPLACE INTO persons (
+  id,
+  first_name,
+  last_name,
+  middle_name,
+  maiden_name,
+  gender,
+  birth_date,
+  death_date,
+  birth_place,
+  death_place,
+  biography,
+  is_living,
+  photo_url,
+  created_at,
+  updated_at
+) VALUES
+  (
+    'person-stepan-petrenko',
+    'Степан',
+    'Петренко',
+    NULL,
+    NULL,
+    'male',
+    '1924-01-18',
+    '1998-09-14',
+    'Львівська область',
+    'Львів',
+    'Дідусь великої демонстраційної гілки родини Петренків.',
+    0,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-kateryna-petrenko',
+    'Катерина',
+    'Петренко',
+    NULL,
+    'Савчук',
+    'female',
+    '1927-05-09',
+    '2004-02-22',
+    'Дрогобич',
+    'Львів',
+    'Бабуся, яка зберігала сімейні архіви та фотографії.',
+    0,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
   (
     'person-ivan-petrenko',
     'Іван',
@@ -21,7 +71,7 @@ INSERT INTO persons (id, first_name, last_name, middle_name, maiden_name, gender
     NULL,
     'Старший представник демонстраційної гілки родини.',
     1,
-    NULL,
+    'https://example.com/photos/ivan-petrenko.jpg',
     '2026-04-06T11:24:01Z',
     '2026-04-06T11:24:01Z'
   ),
@@ -36,7 +86,58 @@ INSERT INTO persons (id, first_name, last_name, middle_name, maiden_name, gender
     NULL,
     'Тернопіль',
     NULL,
-    'Дружина Івана.',
+    'Дружина Івана. Любить збирати історії про родичів.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-larysa-petrenko',
+    'Лариса',
+    'Петренко',
+    NULL,
+    NULL,
+    'female',
+    '1955-04-27',
+    NULL,
+    'Львів',
+    NULL,
+    'Сестра Івана, яка переїхала до Івано-Франківська.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-bohdan-hnatiuk',
+    'Богдан',
+    'Гнатюк',
+    NULL,
+    NULL,
+    'male',
+    '1953-12-03',
+    NULL,
+    'Коломия',
+    NULL,
+    'Чоловік Лариси.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-oksana-hnatiuk',
+    'Оксана',
+    'Гнатюк',
+    NULL,
+    NULL,
+    'female',
+    '1981-02-17',
+    NULL,
+    'Івано-Франківськ',
+    NULL,
+    'Донька Лариси та Богдана.',
     1,
     NULL,
     '2026-04-06T11:24:01Z',
@@ -72,6 +173,40 @@ INSERT INTO persons (id, first_name, last_name, middle_name, maiden_name, gender
     NULL,
     'Дружина Петра.',
     1,
+    'https://example.com/photos/anna-petrenko.jpg',
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-marta-petrenko',
+    'Марта',
+    'Петренко',
+    NULL,
+    NULL,
+    'female',
+    '1983-07-06',
+    NULL,
+    'Львів',
+    NULL,
+    'Донька Івана та Олени, молодша сестра Петра.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-taras-bondar',
+    'Тарас',
+    'Бондар',
+    NULL,
+    NULL,
+    'male',
+    '1982-09-30',
+    NULL,
+    'Чернівці',
+    NULL,
+    'Чоловік Марти.',
+    1,
     NULL,
     '2026-04-06T11:24:01Z',
     '2026-04-06T11:24:01Z'
@@ -92,15 +227,112 @@ INSERT INTO persons (id, first_name, last_name, middle_name, maiden_name, gender
     NULL,
     '2026-04-06T11:24:01Z',
     '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-marko-petrenko',
+    'Марко',
+    'Петренко',
+    NULL,
+    NULL,
+    'male',
+    '2012-03-03',
+    NULL,
+    'Київ',
+    NULL,
+    'Син Петра та Анни.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-danylo-bondar',
+    'Данило',
+    'Бондар',
+    NULL,
+    NULL,
+    'male',
+    '2010-10-21',
+    NULL,
+    'Чернівці',
+    NULL,
+    'Син Марти та Тараса.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-mykhailo-melnyk',
+    'Михайло',
+    'Мельник',
+    NULL,
+    NULL,
+    'male',
+    '1956-01-07',
+    NULL,
+    'Житомир',
+    NULL,
+    'Батько Анни.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'person-halyna-melnyk',
+    'Галина',
+    'Мельник',
+    NULL,
+    'Романюк',
+    'female',
+    '1958-06-19',
+    NULL,
+    'Коростень',
+    NULL,
+    'Мати Анни.',
+    1,
+    NULL,
+    '2026-04-06T11:24:01Z',
+    '2026-04-06T11:24:01Z'
   );
 
-INSERT INTO relationships (id, type, person1_id, person2_id, start_date, end_date, notes, created_at) VALUES
+INSERT OR REPLACE INTO relationships (
+  id,
+  type,
+  person1_id,
+  person2_id,
+  start_date,
+  end_date,
+  notes,
+  created_at
+) VALUES
+  (
+    'rel-stepan-kateryna-spouse',
+    'spouse',
+    'person-stepan-petrenko',
+    'person-kateryna-petrenko',
+    '1948-02-14',
+    NULL,
+    'Шлюб',
+    '2026-04-06T11:24:01Z'
+  ),
   (
     'rel-ivan-olena-spouse',
     'spouse',
     'person-ivan-petrenko',
     'person-olena-petrenko',
     '1975-06-22',
+    NULL,
+    'Шлюб',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-larysa-bohdan-spouse',
+    'spouse',
+    'person-larysa-petrenko',
+    'person-bohdan-hnatiuk',
+    '1978-08-12',
     NULL,
     'Шлюб',
     '2026-04-06T11:24:01Z'
@@ -113,6 +345,86 @@ INSERT INTO relationships (id, type, person1_id, person2_id, start_date, end_dat
     '2001-09-01',
     NULL,
     'Шлюб',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-marta-taras-spouse',
+    'spouse',
+    'person-marta-petrenko',
+    'person-taras-bondar',
+    '2007-05-19',
+    NULL,
+    'Шлюб',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-mykhailo-halyna-spouse',
+    'spouse',
+    'person-mykhailo-melnyk',
+    'person-halyna-melnyk',
+    '1979-04-28',
+    NULL,
+    'Шлюб',
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-stepan-ivan-parent',
+    'parent_child',
+    'person-stepan-petrenko',
+    'person-ivan-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-kateryna-ivan-parent',
+    'parent_child',
+    'person-kateryna-petrenko',
+    'person-ivan-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-stepan-larysa-parent',
+    'parent_child',
+    'person-stepan-petrenko',
+    'person-larysa-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-kateryna-larysa-parent',
+    'parent_child',
+    'person-kateryna-petrenko',
+    'person-larysa-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-larysa-oksana-parent',
+    'parent_child',
+    'person-larysa-petrenko',
+    'person-oksana-hnatiuk',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-bohdan-oksana-parent',
+    'parent_child',
+    'person-bohdan-hnatiuk',
+    'person-oksana-hnatiuk',
+    NULL,
+    NULL,
+    NULL,
     '2026-04-06T11:24:01Z'
   ),
   (
@@ -130,6 +442,26 @@ INSERT INTO relationships (id, type, person1_id, person2_id, start_date, end_dat
     'parent_child',
     'person-olena-petrenko',
     'person-petro-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-ivan-marta-parent',
+    'parent_child',
+    'person-ivan-petrenko',
+    'person-marta-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-olena-marta-parent',
+    'parent_child',
+    'person-olena-petrenko',
+    'person-marta-petrenko',
     NULL,
     NULL,
     NULL,
@@ -154,5 +486,64 @@ INSERT INTO relationships (id, type, person1_id, person2_id, start_date, end_dat
     NULL,
     NULL,
     '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-petro-marko-parent',
+    'parent_child',
+    'person-petro-petrenko',
+    'person-marko-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-anna-marko-parent',
+    'parent_child',
+    'person-anna-petrenko',
+    'person-marko-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-marta-danylo-parent',
+    'parent_child',
+    'person-marta-petrenko',
+    'person-danylo-bondar',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-taras-danylo-parent',
+    'parent_child',
+    'person-taras-bondar',
+    'person-danylo-bondar',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-mykhailo-anna-parent',
+    'parent_child',
+    'person-mykhailo-melnyk',
+    'person-anna-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
+  ),
+  (
+    'rel-halyna-anna-parent',
+    'parent_child',
+    'person-halyna-melnyk',
+    'person-anna-petrenko',
+    NULL,
+    NULL,
+    NULL,
+    '2026-04-06T11:24:01Z'
   );
-

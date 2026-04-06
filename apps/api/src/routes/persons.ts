@@ -32,7 +32,7 @@ export async function getPerson(env: Env, personId: string): Promise<Response> {
   const person = await getPersonById(env.DB, personId);
 
   if (!person) {
-    throw new HttpError(404, "Person not found");
+    throw new HttpError(404, "Людину не знайдено");
   }
 
   return json(person);
@@ -86,7 +86,7 @@ export async function createPerson(request: Request, env: Env): Promise<Response
   const row = await env.DB.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
 
   if (!row) {
-    throw new HttpError(500, "Failed to create person");
+    throw new HttpError(500, "Не вдалося створити людину");
   }
 
   return json(mapPersonRow(row), { status: 201 });
@@ -96,7 +96,7 @@ export async function updatePerson(request: Request, env: Env, personId: string)
   const existing = await getPersonById(env.DB, personId);
 
   if (!existing) {
-    throw new HttpError(404, "Person not found");
+    throw new HttpError(404, "Людину не знайдено");
   }
 
   const input = normalizeUpdatePersonDto(await readJson<UpdatePersonDto>(request));
@@ -164,7 +164,7 @@ export async function updatePerson(request: Request, env: Env, personId: string)
   }
 
   if (updates.length === 0) {
-    throw new HttpError(400, "No fields provided for update");
+    throw new HttpError(400, "Не передано жодного поля для оновлення");
   }
 
   updates.push("updated_at = ?");
@@ -176,7 +176,7 @@ export async function updatePerson(request: Request, env: Env, personId: string)
   const row = await env.DB.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
 
   if (!row) {
-    throw new HttpError(500, "Failed to update person");
+    throw new HttpError(500, "Не вдалося оновити людину");
   }
 
   return json(mapPersonRow(row));
@@ -186,7 +186,7 @@ export async function deletePerson(env: Env, personId: string): Promise<Response
   const existing = await getPersonById(env.DB, personId);
 
   if (!existing) {
-    throw new HttpError(404, "Person not found");
+    throw new HttpError(404, "Людину не знайдено");
   }
 
   await env.DB.batch([
@@ -196,4 +196,3 @@ export async function deletePerson(env: Env, personId: string): Promise<Response
 
   return noContent();
 }
-

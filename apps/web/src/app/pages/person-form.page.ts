@@ -7,6 +7,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
+import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
 
@@ -14,101 +15,103 @@ type LivingOption = "unknown" | "true" | "false";
 
 @Component({
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
     <section class="app-page">
-      <section class="card form-shell">
+      <mat-card class="form-shell">
         <div class="form-header">
           <div>
-            <span class="chip">{{ personId() ? "Редагування" : "Створення" }}</span>
+            <mat-chip-set>
+              <mat-chip>{{ personId() ? "Редагування" : "Створення" }}</mat-chip>
+            </mat-chip-set>
             <h1>{{ personId() ? "Редагувати людину" : "Нова людина" }}</h1>
             <p class="muted">Заповніть базові дані профілю. Для MVP цього достатньо.</p>
           </div>
 
-          <a routerLink="/persons" class="btn btn-secondary form-link">До списку</a>
+          <a mat-stroked-button color="primary" routerLink="/persons" class="form-link">До списку</a>
         </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="form-grid">
           <div class="field-grid">
-            <div class="field">
-              <label for="firstName">Ім’я</label>
-              <input id="firstName" formControlName="firstName">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Ім’я</mat-label>
+              <input matInput id="firstName" formControlName="firstName">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="lastName">Прізвище</label>
-              <input id="lastName" formControlName="lastName">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Прізвище</mat-label>
+              <input matInput id="lastName" formControlName="lastName">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="middleName">По батькові / middle name</label>
-              <input id="middleName" formControlName="middleName">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>По батькові / друге ім’я</mat-label>
+              <input matInput id="middleName" formControlName="middleName">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="maidenName">Дівоче прізвище</label>
-              <input id="maidenName" formControlName="maidenName">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Дівоче прізвище</mat-label>
+              <input matInput id="maidenName" formControlName="maidenName">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="gender">Стать</label>
-              <select id="gender" formControlName="gender">
-                <option value="unknown">unknown</option>
-                <option value="male">male</option>
-                <option value="female">female</option>
-                <option value="other">other</option>
-              </select>
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Стать</mat-label>
+              <mat-select id="gender" formControlName="gender">
+                <mat-option value="unknown">не вказано</mat-option>
+                <mat-option value="male">чоловіча</mat-option>
+                <mat-option value="female">жіноча</mat-option>
+                <mat-option value="other">інша</mat-option>
+              </mat-select>
+            </mat-form-field>
 
-            <div class="field">
-              <label for="isLiving">Статус життя</label>
-              <select id="isLiving" formControlName="isLiving">
-                <option value="unknown">не вказано</option>
-                <option value="true">живий / жива</option>
-                <option value="false">помер / померла</option>
-              </select>
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Статус життя</mat-label>
+              <mat-select id="isLiving" formControlName="isLiving">
+                <mat-option value="unknown">не вказано</mat-option>
+                <mat-option value="true">живий / жива</mat-option>
+                <mat-option value="false">помер / померла</mat-option>
+              </mat-select>
+            </mat-form-field>
 
-            <div class="field">
-              <label for="birthDate">Дата народження</label>
-              <input id="birthDate" type="date" formControlName="birthDate">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Дата народження</mat-label>
+              <input matInput id="birthDate" type="date" formControlName="birthDate">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="deathDate">Дата смерті</label>
-              <input id="deathDate" type="date" formControlName="deathDate">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Дата смерті</mat-label>
+              <input matInput id="deathDate" type="date" formControlName="deathDate">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="birthPlace">Місце народження</label>
-              <input id="birthPlace" formControlName="birthPlace">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Місце народження</mat-label>
+              <input matInput id="birthPlace" formControlName="birthPlace">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="deathPlace">Місце смерті</label>
-              <input id="deathPlace" formControlName="deathPlace">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Місце смерті</mat-label>
+              <input matInput id="deathPlace" formControlName="deathPlace">
+            </mat-form-field>
 
-            <div class="field">
-              <label for="photoUrl">Photo URL</label>
-              <input id="photoUrl" formControlName="photoUrl">
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Посилання на фото</mat-label>
+              <input matInput id="photoUrl" formControlName="photoUrl">
+            </mat-form-field>
           </div>
 
-          <div class="field">
-            <label for="biography">Біографія</label>
-            <textarea id="biography" formControlName="biography"></textarea>
-          </div>
+          <mat-form-field appearance="outline">
+            <mat-label>Біографія</mat-label>
+            <textarea matInput id="biography" formControlName="biography"></textarea>
+          </mat-form-field>
 
           <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" [disabled]="form.invalid || isSaving()">
+            <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || isSaving()">
               {{ isSaving() ? "Збереження..." : "Зберегти" }}
             </button>
           </div>
         </form>
-      </section>
+      </mat-card>
     </section>
   `,
   styles: [
@@ -126,7 +129,11 @@ type LivingOption = "unknown" | "true" | "false";
       }
 
       .form-header h1 {
-        margin: 12px 0 8px;
+        margin: 0 0 8px;
+      }
+
+      .form-header mat-chip-set {
+        margin-bottom: 6px;
       }
 
       .form-grid {
