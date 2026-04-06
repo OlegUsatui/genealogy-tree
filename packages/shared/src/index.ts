@@ -68,9 +68,40 @@ export interface LoginDto {
   password: string;
 }
 
+export type RegistrationPersonMode = "existing" | "new";
+
+export interface RegistrationPersonCandidate {
+  sourcePersonId: string;
+  firstName: string;
+  lastName: string | null;
+  middleName: string | null;
+  maidenName: string | null;
+  gender: Gender;
+  birthDate: string | null;
+  birthPlace: string | null;
+  isLiving: boolean | null;
+}
+
+export interface CreateUserDto {
+  email: string;
+  password: string;
+  personMode: RegistrationPersonMode;
+  existingPersonId?: string | null;
+  person?: CreatePersonDto | null;
+}
+
 export interface SessionUser {
   id: string;
   email: string;
+  primaryPersonId: string | null;
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  primaryPersonId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthMeResponse {

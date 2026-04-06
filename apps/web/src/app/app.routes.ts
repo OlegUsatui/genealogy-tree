@@ -7,6 +7,7 @@ import { PersonDetailsPageComponent } from "./pages/person-details.page";
 import { PersonFormPageComponent } from "./pages/person-form.page";
 import { PersonsListPageComponent } from "./pages/persons-list.page";
 import { TreePageComponent } from "./pages/tree.page";
+import { UserCreatePageComponent } from "./pages/user-create.page";
 
 export const routes: Routes = [
   {
@@ -38,6 +39,10 @@ export const routes: Routes = [
     path: "persons/:id",
     component: PersonDetailsPageComponent,
     canActivate: [authGuard],
+  },
+  {
+    path: "users/new",
+    component: UserCreatePageComponent,
   },
   {
     path: "tree/:personId",

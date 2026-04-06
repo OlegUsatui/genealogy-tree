@@ -8,6 +8,7 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angula
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
 import { MATERIAL_IMPORTS } from "../material";
+import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
 
@@ -106,11 +107,38 @@ type LivingOption = "unknown" | "true" | "false";
           <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
 
           <div class="form-actions">
-            <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || isSaving()">
+            <button
+              mat-flat-button
+              color="primary"
+              type="submit"
+              [disabled]="form.invalid || isSaving() || isDeletingAccount()"
+            >
               {{ isSaving() ? "Збереження..." : "Зберегти" }}
             </button>
           </div>
         </form>
+
+        <mat-card class="danger-zone" appearance="outlined" *ngIf="isOwnProfile()">
+          <div class="danger-copy">
+            <h2>Видалення акаунту</h2>
+            <p class="muted">
+              Ця дія видалить ваш акаунт, ваш профіль, усіх людей і всі зв’язки в цьому акаунті.
+              Скасувати це не можна.
+            </p>
+          </div>
+
+          <p class="error-text" *ngIf="deleteAccountError()">{{ deleteAccountError() }}</p>
+
+          <button
+            mat-stroked-button
+            type="button"
+            class="danger-button"
+            [disabled]="isSaving() || isDeletingAccount()"
+            (click)="deleteCurrentAccount()"
+          >
+            {{ isDeletingAccount() ? "Видалення..." : "Видалити акаунт" }}
+          </button>
+        </mat-card>
       </mat-card>
     </section>
   `,
@@ -147,6 +175,31 @@ type LivingOption = "unknown" | "true" | "false";
         justify-content: flex-start;
       }
 
+      .danger-zone {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-top: 20px;
+        padding: 18px;
+        border-color: rgba(182, 79, 79, 0.28);
+        background: rgba(255, 246, 246, 0.72);
+      }
+
+      .danger-copy h2 {
+        margin: 0 0 6px;
+        font-size: 20px;
+      }
+
+      .danger-copy p {
+        margin: 0;
+      }
+
+      .danger-button {
+        align-self: flex-start;
+        border-color: rgba(182, 79, 79, 0.45);
+        color: #8f2d2d;
+      }
+
       .form-link {
         text-decoration: none;
       }
@@ -164,10 +217,13 @@ export class PersonFormPageComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly personsService = inject(PersonsService);
+  private readonly authService = inject(AuthService);
 
   readonly personId = signal<string | null>(null);
   readonly isSaving = signal(false);
+  readonly isDeletingAccount = signal(false);
   readonly errorMessage = signal("");
+  readonly deleteAccountError = signal("");
 
   readonly form = new FormGroup({
     firstName: new FormControl("", {
@@ -235,6 +291,35 @@ export class PersonFormPageComponent {
       this.errorMessage.set(readApiError(error));
     } finally {
       this.isSaving.set(false);
+    }
+  }
+
+  isOwnProfile(): boolean {
+    return this.personId() !== null && this.personId() === this.authService.user()?.primaryPersonId;
+  }
+
+  async deleteCurrentAccount(): Promise<void> {
+    if (!this.isOwnProfile()) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Видалити весь акаунт разом із вашим профілем, усіма людьми та всіма зв’язками?",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.isDeletingAccount.set(true);
+    this.deleteAccountError.set("");
+
+    try {
+      await this.authService.deleteAccount();
+    } catch (error) {
+      this.deleteAccountError.set(readApiError(error));
+    } finally {
+      this.isDeletingAccount.set(false);
     }
   }
 

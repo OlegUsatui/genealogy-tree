@@ -1,13 +1,18 @@
+import type { SessionUser } from "@family-tree/shared";
+
+import { deleteAccount } from "./routes/account";
 import { deletePerson, getPerson, getPersons, createPerson, updatePerson } from "./routes/persons";
 import { createRelationship, deleteRelationship, getRelationships } from "./routes/relationships";
 import { getTree } from "./routes/tree";
 import { login, logout, me } from "./routes/auth";
-import { searchPersons } from "./routes/search";
+import { searchPersons, searchRegistrationPersons } from "./routes/search";
+import { createUser } from "./routes/users";
 import { applyCors, errorResponse, handleOptions, HttpError, json } from "./lib/http";
 import { readSessionUser } from "./lib/session";
 import type { Env } from "./types";
 
 const protectedPrefixes = [
+  "/api/account",
   "/api/persons",
   "/api/relationships",
   "/api/tree",
@@ -28,15 +33,13 @@ export default {
         throw new HttpError(500, "SESSION_SECRET не налаштований");
       }
 
-      if (requiresAuth(pathname)) {
-        const user = await readSessionUser(request, env);
+      const currentUser = requiresAuth(pathname) ? await readSessionUser(request, env) : null;
 
-        if (!user) {
-          throw new HttpError(401, "Потрібна авторизація");
-        }
+      if (requiresAuth(pathname) && !currentUser) {
+        throw new HttpError(401, "Потрібна авторизація");
       }
 
-      const response = await routeRequest(request, env, url, pathname);
+      const response = await routeRequest(request, env, url, pathname, currentUser);
       return applyCors(request, response);
     } catch (error) {
       return applyCors(request, errorResponse(error));
@@ -49,6 +52,7 @@ async function routeRequest(
   env: Env,
   url: URL,
   pathname: string,
+  currentUser: SessionUser | null,
 ): Promise<Response> {
   if (request.method === "GET" && pathname === "/api/health") {
     return json({ ok: true });
@@ -66,12 +70,24 @@ async function routeRequest(
     return me(request, env);
   }
 
+  if (request.method === "DELETE" && pathname === "/api/account") {
+    return deleteAccount(request, env, requireAuthenticatedUser(currentUser));
+  }
+
+  if (request.method === "POST" && pathname === "/api/users") {
+    return createUser(request, env);
+  }
+
+  if (request.method === "GET" && pathname === "/api/signup/persons") {
+    return searchRegistrationPersons(url, env);
+  }
+
   if (request.method === "GET" && pathname === "/api/persons") {
-    return getPersons(env);
+    return getPersons(env, requireAuthenticatedUser(currentUser));
   }
 
   if (request.method === "POST" && pathname === "/api/persons") {
-    return createPerson(request, env);
+    return createPerson(request, env, requireAuthenticatedUser(currentUser));
   }
 
   const personMatch = pathname.match(/^\/api\/persons\/([^/]+)$/);
@@ -80,40 +96,40 @@ async function routeRequest(
     const personId = decodeURIComponent(personMatch[1]);
 
     if (request.method === "GET") {
-      return getPerson(env, personId);
+      return getPerson(env, requireAuthenticatedUser(currentUser), personId);
     }
 
     if (request.method === "PATCH") {
-      return updatePerson(request, env, personId);
+      return updatePerson(request, env, requireAuthenticatedUser(currentUser), personId);
     }
 
     if (request.method === "DELETE") {
-      return deletePerson(env, personId);
+      return deletePerson(env, requireAuthenticatedUser(currentUser), personId);
     }
   }
 
   if (request.method === "GET" && pathname === "/api/relationships") {
-    return getRelationships(url, env);
+    return getRelationships(url, env, requireAuthenticatedUser(currentUser));
   }
 
   if (request.method === "POST" && pathname === "/api/relationships") {
-    return createRelationship(request, env);
+    return createRelationship(request, env, requireAuthenticatedUser(currentUser));
   }
 
   const relationshipMatch = pathname.match(/^\/api\/relationships\/([^/]+)$/);
 
   if (relationshipMatch && request.method === "DELETE") {
-    return deleteRelationship(env, decodeURIComponent(relationshipMatch[1]));
+    return deleteRelationship(env, requireAuthenticatedUser(currentUser), decodeURIComponent(relationshipMatch[1]));
   }
 
   if (request.method === "GET" && pathname === "/api/search") {
-    return searchPersons(url, env);
+    return searchPersons(url, env, requireAuthenticatedUser(currentUser));
   }
 
   const treeMatch = pathname.match(/^\/api\/tree\/([^/]+)$/);
 
   if (treeMatch && request.method === "GET") {
-    return getTree(url, env, decodeURIComponent(treeMatch[1]));
+    return getTree(url, env, requireAuthenticatedUser(currentUser), decodeURIComponent(treeMatch[1]));
   }
 
   throw new HttpError(404, "Маршрут не знайдено");
@@ -121,4 +137,12 @@ async function routeRequest(
 
 function requiresAuth(pathname: string): boolean {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function requireAuthenticatedUser(user: SessionUser | null): SessionUser {
+  if (!user) {
+    throw new HttpError(401, "Потрібна авторизація");
+  }
+
+  return user;
 }

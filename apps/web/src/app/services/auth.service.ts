@@ -48,4 +48,15 @@ export class AuthService {
       await this.router.navigateByUrl("/login");
     }
   }
+
+  async deleteAccount(): Promise<void> {
+    await awaitOne<{ success: boolean }>(this.api.delete<{ success: boolean }>("/account"));
+    this.user.set(null);
+    this.loaded.set(true);
+    await this.router.navigate(["/login"], {
+      queryParams: {
+        accountDeleted: "1",
+      },
+    });
+  }
 }

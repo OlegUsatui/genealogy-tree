@@ -9,6 +9,7 @@ type UserRow = {
   id: string;
   email: string;
   password_hash: string;
+  primary_person_id: string | null;
 };
 
 export async function login(request: Request, env: Env): Promise<Response> {
@@ -21,7 +22,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
   }
 
   const user = await env.DB.prepare(
-    "SELECT id, email, password_hash FROM users WHERE email = ?",
+    "SELECT id, email, password_hash, primary_person_id FROM users WHERE email = ?",
   )
     .bind(email)
     .first<UserRow>();
@@ -33,6 +34,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
   const sessionUser: SessionUser = {
     id: user.id,
     email: user.email,
+    primaryPersonId: user.primary_person_id,
   };
   const token = await createSessionToken(sessionUser, env);
 

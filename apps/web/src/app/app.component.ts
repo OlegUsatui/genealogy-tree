@@ -18,6 +18,14 @@ import { AuthService } from "./services/auth.service";
       <nav class="shell-nav" *ngIf="auth.loaded() && auth.user(); else loginLink">
         <a mat-button routerLink="/" [routerLinkActiveOptions]="{ exact: true }" routerLinkActive="active-link">Дерево</a>
         <a mat-button routerLink="/persons" routerLinkActive="active-link">Люди</a>
+        <a
+          mat-button
+          *ngIf="auth.user()?.primaryPersonId as primaryPersonId"
+          [routerLink]="['/persons', primaryPersonId, 'edit']"
+          routerLinkActive="active-link"
+        >
+          Мій профіль
+        </a>
         <mat-chip-set>
           <mat-chip>{{ auth.user()?.email }}</mat-chip>
         </mat-chip-set>
@@ -27,6 +35,7 @@ import { AuthService } from "./services/auth.service";
       <ng-template #loginLink>
         <nav class="shell-nav">
           <a mat-button routerLink="/login" routerLinkActive="active-link">Вхід</a>
+          <a mat-button routerLink="/users/new" routerLinkActive="active-link">Новий користувач</a>
         </nav>
       </ng-template>
     </mat-toolbar>

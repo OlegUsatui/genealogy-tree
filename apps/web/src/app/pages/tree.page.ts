@@ -8,6 +8,7 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angula
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
 import { MATERIAL_IMPORTS } from "../material";
+import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
 import { TreeService } from "../services/tree.service";
@@ -108,8 +109,12 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
               ></rect>
 
               <text class="tree-node-badge" x="18" y="24">{{ nodeRoleLabel(node) }}</text>
-              <text class="tree-node-title" x="18" y="46">{{ labelTop(node.person) }}</text>
-              <text class="tree-node-meta" x="18" y="68">{{ labelBottom(node.person) }}</text>
+              <text class="tree-node-title" x="18" y="46">
+                <tspan *ngFor="let line of titleLines(node.person); let index = index" x="18" [attr.dy]="index === 0 ? 0 : 20">
+                  {{ line }}
+                </tspan>
+              </text>
+              <text class="tree-node-meta" x="18" y="92">{{ labelBottom(node.person) }}</text>
             </g>
           </svg>
         </div>
@@ -325,6 +330,7 @@ export class TreePageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly treeService = inject(TreeService);
   private readonly personsService = inject(PersonsService);
+  private readonly authService = inject(AuthService);
 
   readonly errorMessage = signal("");
   readonly isLoading = signal(false);
@@ -355,7 +361,7 @@ export class TreePageComponent {
 
       this.rootPersonId.set(null);
 
-      const firstPersonId = this.persons()[0]?.id ?? "";
+      const firstPersonId = this.getDefaultRootPersonId(this.persons());
 
       if (firstPersonId) {
         this.controlsForm.controls.personId.setValue(firstPersonId, { emitEvent: false });
@@ -380,8 +386,8 @@ export class TreePageComponent {
     return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
   }
 
-  labelTop(person: Person): string {
-    return truncate(this.displayName(person), 22);
+  titleLines(person: Person): string[] {
+    return wrapNodeTitle(this.displayName(person));
   }
 
   labelBottom(person: Person): string {
@@ -434,10 +440,12 @@ export class TreePageComponent {
       );
       this.persons.set(persons);
 
-      if (!this.rootPersonId() && persons[0]) {
-        this.rootPersonId.set(persons[0].id);
-        this.controlsForm.controls.personId.setValue(persons[0].id, { emitEvent: false });
-        await this.loadTree(persons[0].id);
+      const defaultRootPersonId = this.getDefaultRootPersonId(persons);
+
+      if (!this.rootPersonId() && defaultRootPersonId) {
+        this.rootPersonId.set(defaultRootPersonId);
+        this.controlsForm.controls.personId.setValue(defaultRootPersonId, { emitEvent: false });
+        await this.loadTree(defaultRootPersonId);
       }
     } catch (error) {
       this.errorMessage.set(readApiError(error));
@@ -460,10 +468,66 @@ export class TreePageComponent {
       this.isLoading.set(false);
     }
   }
+
+  private getDefaultRootPersonId(persons: Person[]): string {
+    const primaryPersonId = this.authService.user()?.primaryPersonId;
+
+    if (primaryPersonId && persons.some((person) => person.id === primaryPersonId)) {
+      return primaryPersonId;
+    }
+
+    return persons[0]?.id ?? "";
+  }
 }
 
 function truncate(value: string, limit: number): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+}
+
+function wrapNodeTitle(value: string): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) {
+    return ["Без імені"];
+  }
+
+  let index = 0;
+  let firstLine = "";
+
+  while (index < words.length) {
+    const word = words[index];
+
+    if (firstLine.length === 0) {
+      if (word.length > 18) {
+        firstLine = fitWord(word, 18);
+        index += 1;
+        break;
+      }
+
+      firstLine = word;
+      index += 1;
+      continue;
+    }
+
+    const candidate = `${firstLine} ${word}`;
+
+    if (candidate.length > 18) {
+      break;
+    }
+
+    firstLine = candidate;
+    index += 1;
+  }
+
+  if (index >= words.length) {
+    return [firstLine];
+  }
+
+  return [firstLine, truncate(words.slice(index).join(" "), 18)];
+}
+
+function fitWord(word: string, limit: number): string {
+  return word.length > limit ? truncate(word, limit) : word;
 }
 
 function readApiError(error: unknown): string {

@@ -100,9 +100,20 @@ export async function readSessionUser(request: Request, env: Env): Promise<Sessi
     return null;
   }
 
+  const user = await env.DB.prepare(
+    "SELECT id, email, primary_person_id FROM users WHERE id = ?",
+  )
+    .bind(payload.id)
+    .first<{ id: string; email: string; primary_person_id: string | null }>();
+
+  if (!user) {
+    return null;
+  }
+
   return {
-    id: payload.id,
-    email: payload.email,
+    id: user.id,
+    email: user.email,
+    primaryPersonId: user.primary_person_id,
   };
 }
 
@@ -131,4 +142,3 @@ function serializeCookie(request: Request, env: Env, value: string, maxAge: numb
 
   return parts.join("; ");
 }
-

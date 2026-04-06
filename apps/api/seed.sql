@@ -1,8 +1,9 @@
-INSERT OR REPLACE INTO users (id, email, password_hash, created_at, updated_at) VALUES
+INSERT OR REPLACE INTO users (id, email, password_hash, primary_person_id, created_at, updated_at) VALUES
   (
     'user-admin',
     'admin@example.com',
     'pbkdf2$310000$family-tree-admin-salt$K_Vvqojs01caCGMUvH-EXJy7qjcgu5WcPnejjAydRi0',
+    'person-petro-petrenko',
     '2026-04-06T11:24:01Z',
     '2026-04-06T11:24:01Z'
   );

@@ -1,4 +1,4 @@
-import type { TreeResponse } from "@family-tree/shared";
+import type { SessionUser, TreeResponse } from "@family-tree/shared";
 
 import {
   getChildRelationshipsForParents,
@@ -10,8 +10,13 @@ import {
 import { HttpError, json } from "../lib/http";
 import type { Env } from "../types";
 
-export async function getTree(url: URL, env: Env, personId: string): Promise<Response> {
-  const rootPerson = await getPersonById(env.DB, personId);
+export async function getTree(
+  url: URL,
+  env: Env,
+  currentUser: SessionUser,
+  personId: string,
+): Promise<Response> {
+  const rootPerson = await getPersonById(env.DB, currentUser.id, personId);
 
   if (!rootPerson) {
     throw new HttpError(404, "Людину не знайдено");
@@ -25,7 +30,7 @@ export async function getTree(url: URL, env: Env, personId: string): Promise<Res
   let currentAncestorIds = [personId];
 
   for (let level = 0; level < upDepth; level += 1) {
-    const relationships = await getParentRelationshipsForChildren(env.DB, currentAncestorIds);
+    const relationships = await getParentRelationshipsForChildren(env.DB, currentUser.id, currentAncestorIds);
     const nextAncestorIds = new Set<string>();
 
     for (const relationship of relationships) {
@@ -41,7 +46,7 @@ export async function getTree(url: URL, env: Env, personId: string): Promise<Res
   let currentDescendantIds = [personId];
 
   for (let level = 0; level < downDepth; level += 1) {
-    const relationships = await getChildRelationshipsForParents(env.DB, currentDescendantIds);
+    const relationships = await getChildRelationshipsForParents(env.DB, currentUser.id, currentDescendantIds);
     const nextDescendantIds = new Set<string>();
 
     for (const relationship of relationships) {
@@ -54,7 +59,7 @@ export async function getTree(url: URL, env: Env, personId: string): Promise<Res
     currentDescendantIds = [...nextDescendantIds];
   }
 
-  const spouseRelationships = await getSpouseRelationshipsForPersons(env.DB, [...personIds]);
+  const spouseRelationships = await getSpouseRelationshipsForPersons(env.DB, currentUser.id, [...personIds]);
 
   for (const relationship of spouseRelationships) {
     relationshipMap.set(relationship.id, relationship);
@@ -62,7 +67,7 @@ export async function getTree(url: URL, env: Env, personId: string): Promise<Res
     personIds.add(relationship.person2Id);
   }
 
-  const persons = await getPersonsByIds(env.DB, [...personIds]);
+  const persons = await getPersonsByIds(env.DB, currentUser.id, [...personIds]);
   const response: TreeResponse = {
     rootPersonId: personId,
     persons,

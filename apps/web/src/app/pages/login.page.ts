@@ -2,14 +2,15 @@ import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { Component, inject, signal } from "@angular/core";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
-import { ActivatedRoute, Router } from "@angular/router";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { MatSnackBar } from "@angular/material/snack-bar";
 
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 
 @Component({
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
     <section class="app-page login-page">
       <mat-card class="login-card">
@@ -40,6 +41,10 @@ import { AuthService } from "../services/auth.service";
           <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || isSubmitting()">
             {{ isSubmitting() ? "Вхід..." : "Увійти" }}
           </button>
+
+          <a mat-stroked-button color="primary" routerLink="/users/new" class="signup-link">
+            Створити нового користувача
+          </a>
 
           <mat-card class="seed-hint" appearance="outlined">
             <strong>Тестовий вхід:</strong>
@@ -95,6 +100,10 @@ import { AuthService } from "../services/auth.service";
         color: var(--muted);
       }
 
+      .signup-link {
+        text-decoration: none;
+      }
+
       @media (max-width: 860px) {
         .login-card {
           grid-template-columns: 1fr;
@@ -107,6 +116,7 @@ export class LoginPageComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal("");
@@ -121,6 +131,56 @@ export class LoginPageComponent {
       validators: [Validators.required],
     }),
   });
+
+  constructor() {
+    const created = this.route.snapshot.queryParamMap.get("created");
+    const accountDeleted = this.route.snapshot.queryParamMap.get("accountDeleted");
+    const email = this.route.snapshot.queryParamMap.get("email");
+
+    if (email) {
+      this.form.controls.email.setValue(email);
+      this.form.controls.password.setValue("");
+    }
+
+    if (created === "1") {
+      this.snackBar.open("Користувача створено. Тепер він може увійти в систему.", "Закрити", {
+        duration: 5000,
+        horizontalPosition: "right",
+        verticalPosition: "top",
+      });
+
+      queueMicrotask(() => {
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: {
+            created: null,
+            email: null,
+          },
+          queryParamsHandling: "merge",
+          replaceUrl: true,
+        });
+      });
+    }
+
+    if (accountDeleted === "1") {
+      this.snackBar.open("Акаунт видалено.", "Закрити", {
+        duration: 5000,
+        horizontalPosition: "right",
+        verticalPosition: "top",
+      });
+
+      queueMicrotask(() => {
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: {
+            accountDeleted: null,
+          },
+          queryParamsHandling: "merge",
+          replaceUrl: true,
+        });
+      });
+    }
+  }
 
   async submit(): Promise<void> {
     if (this.form.invalid) {

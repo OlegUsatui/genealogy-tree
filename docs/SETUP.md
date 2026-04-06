@@ -15,10 +15,13 @@
   - `CreateRelationshipDto`
   - `TreeResponse`
   - auth DTO
+  - user DTO
 - Cloudflare Worker API:
   - `POST /api/auth/login`
   - `POST /api/auth/logout`
   - `GET /api/auth/me`
+  - `POST /api/users`
+  - `GET /api/signup/persons?q=...`
   - `GET /api/persons`
   - `GET /api/persons/:id`
   - `POST /api/persons`
@@ -37,6 +40,7 @@
   - admin user
 - Angular frontend:
   - `/login`
+  - `/users/new`
   - `/persons`
   - `/persons/new`
   - `/persons/:id`
@@ -50,6 +54,7 @@
   - relationship form
   - search UI
   - tree UI
+  - user create UI
 
 ## Локальний запуск
 
@@ -97,6 +102,8 @@ Web буде доступний на `http://localhost:4200`.
 - Електронна пошта: `admin@example.com`
 - Password: `admin12345`
 
+Увесь demo-набір людей і зв’язків прив’язаний саме до цього admin-акаунта. Під час реєстрації новий користувач або створює власну базову картку, або обирає себе зі списку вже наявних людей. Ця картка стає центральною людиною акаунта і доступна в хедері як `Мій профіль`.
+
 ## Важливо для deploy
 
 - У `apps/api/wrangler.toml` зараз стоїть placeholder `database_id`.
@@ -105,7 +112,7 @@ Web буде доступний на `http://localhost:4200`.
 
 ## TODO
 
-- Немає UI для створення нових користувачів, є лише seed admin.
+- Реєстрація відкрита публічно: немає ролей, invite-flow або approval-моделі для створення користувачів.
 - Немає upload фото, тільки `photoUrl`.
 - Немає автоматизованих тестів.
 - Немає Cloudflare Pages/Workers CI-конфігурації.

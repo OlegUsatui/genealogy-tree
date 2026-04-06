@@ -4,6 +4,7 @@ import type { DbNullable } from "../types";
 
 type PersonRow = {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: DbNullable<string>;
   middle_name: DbNullable<string>;
@@ -22,6 +23,7 @@ type PersonRow = {
 
 type RelationshipRow = {
   id: string;
+  user_id: string;
   type: Relationship["type"];
   person1_id: string;
   person2_id: string;
@@ -64,27 +66,43 @@ export function mapRelationshipRow(row: RelationshipRow): Relationship {
   };
 }
 
-export async function getPersonById(db: D1Database, personId: string): Promise<Person | null> {
-  const row = await db.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
+export async function getPersonById(
+  db: D1Database,
+  userId: string,
+  personId: string,
+): Promise<Person | null> {
+  const row = await db
+    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
+    .bind(userId, personId)
+    .first<PersonRow>();
   return row ? mapPersonRow(row) : null;
 }
 
-export async function listPersons(db: D1Database): Promise<Person[]> {
+export async function listPersons(db: D1Database, userId: string): Promise<Person[]> {
   const result = await db
-    .prepare("SELECT * FROM persons ORDER BY COALESCE(last_name, ''), first_name, created_at")
+    .prepare(
+      "SELECT * FROM persons WHERE user_id = ? ORDER BY COALESCE(last_name, ''), first_name, created_at",
+    )
+    .bind(userId)
     .all<PersonRow>();
   return result.results.map(mapPersonRow);
 }
 
-export async function getPersonsByIds(db: D1Database, personIds: string[]): Promise<Person[]> {
+export async function getPersonsByIds(
+  db: D1Database,
+  userId: string,
+  personIds: string[],
+): Promise<Person[]> {
   if (personIds.length === 0) {
     return [];
   }
 
   const placeholders = createPlaceholders(personIds.length);
   const result = await db
-    .prepare(`SELECT * FROM persons WHERE id IN (${placeholders}) ORDER BY COALESCE(last_name, ''), first_name`)
-    .bind(...personIds)
+    .prepare(
+      `SELECT * FROM persons WHERE user_id = ? AND id IN (${placeholders}) ORDER BY COALESCE(last_name, ''), first_name`,
+    )
+    .bind(userId, ...personIds)
     .all<PersonRow>();
 
   return result.results.map(mapPersonRow);
@@ -92,6 +110,7 @@ export async function getPersonsByIds(db: D1Database, personIds: string[]): Prom
 
 export async function listRelationshipsByPersonId(
   db: D1Database,
+  userId: string,
   personId: string,
 ): Promise<Relationship[]> {
   const result = await db
@@ -99,11 +118,12 @@ export async function listRelationshipsByPersonId(
       `
         SELECT *
         FROM relationships
-        WHERE person1_id = ? OR person2_id = ?
+        WHERE user_id = ?
+          AND (person1_id = ? OR person2_id = ?)
         ORDER BY created_at DESC
       `,
     )
-    .bind(personId, personId)
+    .bind(userId, personId, personId)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -111,22 +131,23 @@ export async function listRelationshipsByPersonId(
 
 export async function getRelationshipById(
   db: D1Database,
+  userId: string,
   relationshipId: string,
 ): Promise<Relationship | null> {
   const row = await db
-    .prepare("SELECT * FROM relationships WHERE id = ?")
-    .bind(relationshipId)
+    .prepare("SELECT * FROM relationships WHERE user_id = ? AND id = ?")
+    .bind(userId, relationshipId)
     .first<RelationshipRow>();
 
   return row ? mapRelationshipRow(row) : null;
 }
 
-export async function personsExist(db: D1Database, personIds: string[]): Promise<boolean> {
+export async function personsExist(db: D1Database, userId: string, personIds: string[]): Promise<boolean> {
   const uniqueIds = [...new Set(personIds)];
   const placeholders = createPlaceholders(uniqueIds.length);
   const row = await db
-    .prepare(`SELECT COUNT(*) AS count FROM persons WHERE id IN (${placeholders})`)
-    .bind(...uniqueIds)
+    .prepare(`SELECT COUNT(*) AS count FROM persons WHERE user_id = ? AND id IN (${placeholders})`)
+    .bind(userId, ...uniqueIds)
     .first<{ count: number }>();
 
   return Number(row?.count ?? 0) === uniqueIds.length;
@@ -134,6 +155,7 @@ export async function personsExist(db: D1Database, personIds: string[]): Promise
 
 export async function getParentRelationshipsForChildren(
   db: D1Database,
+  userId: string,
   childIds: string[],
 ): Promise<Relationship[]> {
   if (childIds.length === 0) {
@@ -145,11 +167,12 @@ export async function getParentRelationshipsForChildren(
       `
         SELECT *
         FROM relationships
-        WHERE type = 'parent_child'
+        WHERE user_id = ?
+          AND type = 'parent_child'
           AND person2_id IN (${createPlaceholders(childIds.length)})
       `,
     )
-    .bind(...childIds)
+    .bind(userId, ...childIds)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -157,6 +180,7 @@ export async function getParentRelationshipsForChildren(
 
 export async function getChildRelationshipsForParents(
   db: D1Database,
+  userId: string,
   parentIds: string[],
 ): Promise<Relationship[]> {
   if (parentIds.length === 0) {
@@ -168,11 +192,12 @@ export async function getChildRelationshipsForParents(
       `
         SELECT *
         FROM relationships
-        WHERE type = 'parent_child'
+        WHERE user_id = ?
+          AND type = 'parent_child'
           AND person1_id IN (${createPlaceholders(parentIds.length)})
       `,
     )
-    .bind(...parentIds)
+    .bind(userId, ...parentIds)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -180,6 +205,7 @@ export async function getChildRelationshipsForParents(
 
 export async function getSpouseRelationshipsForPersons(
   db: D1Database,
+  userId: string,
   personIds: string[],
 ): Promise<Relationship[]> {
   if (personIds.length === 0) {
@@ -192,11 +218,12 @@ export async function getSpouseRelationshipsForPersons(
       `
         SELECT *
         FROM relationships
-        WHERE type = 'spouse'
+        WHERE user_id = ?
+          AND type = 'spouse'
           AND (person1_id IN (${placeholders}) OR person2_id IN (${placeholders}))
       `,
     )
-    .bind(...personIds, ...personIds)
+    .bind(userId, ...personIds, ...personIds)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -205,4 +232,3 @@ export async function getSpouseRelationshipsForPersons(
 function createPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
 }
-

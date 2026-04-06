@@ -4,7 +4,7 @@ import { hierarchy, tree as d3Tree } from "d3-hierarchy";
 import { linkHorizontal, linkVertical } from "d3-shape";
 
 const nodeWidth = 206;
-const nodeHeight = 88;
+const nodeHeight = 108;
 const levelGap = 188;
 const siblingGap = 108;
 const spouseGap = 62;
@@ -336,4 +336,3 @@ function comparePersons(left: Person, right: Person): number {
   const rightName = [right.lastName ?? "", right.firstName, right.middleName ?? ""].join(" ").trim();
   return leftName.localeCompare(rightName, "uk");
 }
-

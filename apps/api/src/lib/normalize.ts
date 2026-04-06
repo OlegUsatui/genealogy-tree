@@ -1,8 +1,9 @@
-import type { CreatePersonDto, CreateRelationshipDto, Gender, UpdatePersonDto } from "@family-tree/shared";
+import type { CreatePersonDto, CreateRelationshipDto, CreateUserDto, Gender, UpdatePersonDto } from "@family-tree/shared";
 
 import { HttpError } from "./http";
 
 const allowedGenders: Gender[] = ["male", "female", "other", "unknown"];
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizeOptionalString(value: unknown): string | null {
   if (value === undefined || value === null) {
@@ -159,6 +160,62 @@ export function normalizeCreateRelationshipDto(input: CreateRelationshipDto): Cr
     startDate: normalizeOptionalString(input.startDate),
     endDate: normalizeOptionalString(input.endDate),
     notes: normalizeOptionalString(input.notes),
+  };
+}
+
+export interface NormalizedCreateUserInput {
+  email: string;
+  password: string;
+  personMode: "existing" | "new";
+  existingPersonId: string | null;
+  person: (NormalizedPersonInput & { firstName: string }) | null;
+}
+
+export function normalizeCreateUserDto(input: CreateUserDto): NormalizedCreateUserInput {
+  const email = normalizeOptionalString(input.email)?.toLowerCase();
+
+  if (!email) {
+    throw new HttpError(400, "Поле email є обов’язковим");
+  }
+
+  if (!emailPattern.test(email)) {
+    throw new HttpError(400, "Поле email має бути коректною електронною адресою");
+  }
+
+  if (typeof input.password !== "string" || input.password.length === 0) {
+    throw new HttpError(400, "Поле password є обов’язковим");
+  }
+
+  if (input.password.length < 8) {
+    throw new HttpError(400, "Пароль має містити щонайменше 8 символів");
+  }
+
+  if (input.personMode !== "existing" && input.personMode !== "new") {
+    throw new HttpError(400, "Потрібно вказати, як додати вас до дерева");
+  }
+
+  if (input.personMode === "existing") {
+    const existingPersonId = normalizeOptionalString(input.existingPersonId);
+
+    if (!existingPersonId) {
+      throw new HttpError(400, "Оберіть себе зі списку");
+    }
+
+    return {
+      email,
+      password: input.password,
+      personMode: "existing",
+      existingPersonId,
+      person: null,
+    };
+  }
+
+  return {
+    email,
+    password: input.password,
+    personMode: "new",
+    existingPersonId: null,
+    person: normalizeCreatePersonDto((input.person ?? {}) as CreatePersonDto),
   };
 }
 

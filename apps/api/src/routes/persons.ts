@@ -1,4 +1,4 @@
-import type { CreatePersonDto, UpdatePersonDto } from "@family-tree/shared";
+import type { CreatePersonDto, SessionUser, UpdatePersonDto } from "@family-tree/shared";
 
 import { getPersonById, listPersons, mapPersonRow } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
@@ -7,6 +7,7 @@ import type { Env } from "../types";
 
 type PersonRow = {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: string | null;
   middle_name: string | null;
@@ -23,13 +24,13 @@ type PersonRow = {
   updated_at: string;
 };
 
-export async function getPersons(env: Env): Promise<Response> {
-  const persons = await listPersons(env.DB);
+export async function getPersons(env: Env, currentUser: SessionUser): Promise<Response> {
+  const persons = await listPersons(env.DB, currentUser.id);
   return json(persons);
 }
 
-export async function getPerson(env: Env, personId: string): Promise<Response> {
-  const person = await getPersonById(env.DB, personId);
+export async function getPerson(env: Env, currentUser: SessionUser, personId: string): Promise<Response> {
+  const person = await getPersonById(env.DB, currentUser.id, personId);
 
   if (!person) {
     throw new HttpError(404, "Людину не знайдено");
@@ -38,7 +39,7 @@ export async function getPerson(env: Env, personId: string): Promise<Response> {
   return json(person);
 }
 
-export async function createPerson(request: Request, env: Env): Promise<Response> {
+export async function createPerson(request: Request, env: Env, currentUser: SessionUser): Promise<Response> {
   const input = normalizeCreatePersonDto(await readJson<CreatePersonDto>(request));
   const personId = crypto.randomUUID();
   const timestamp = new Date().toISOString();
@@ -47,6 +48,7 @@ export async function createPerson(request: Request, env: Env): Promise<Response
     `
       INSERT INTO persons (
         id,
+        user_id,
         first_name,
         last_name,
         middle_name,
@@ -61,11 +63,12 @@ export async function createPerson(request: Request, env: Env): Promise<Response
         photo_url,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   )
     .bind(
       personId,
+      currentUser.id,
       input.firstName,
       input.lastName,
       input.middleName,
@@ -83,7 +86,10 @@ export async function createPerson(request: Request, env: Env): Promise<Response
     )
     .run();
 
-  const row = await env.DB.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
+  const row = await env.DB
+    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
+    .bind(currentUser.id, personId)
+    .first<PersonRow>();
 
   if (!row) {
     throw new HttpError(500, "Не вдалося створити людину");
@@ -92,8 +98,13 @@ export async function createPerson(request: Request, env: Env): Promise<Response
   return json(mapPersonRow(row), { status: 201 });
 }
 
-export async function updatePerson(request: Request, env: Env, personId: string): Promise<Response> {
-  const existing = await getPersonById(env.DB, personId);
+export async function updatePerson(
+  request: Request,
+  env: Env,
+  currentUser: SessionUser,
+  personId: string,
+): Promise<Response> {
+  const existing = await getPersonById(env.DB, currentUser.id, personId);
 
   if (!existing) {
     throw new HttpError(404, "Людину не знайдено");
@@ -169,11 +180,16 @@ export async function updatePerson(request: Request, env: Env, personId: string)
 
   updates.push("updated_at = ?");
   values.push(new Date().toISOString());
-  values.push(personId);
 
-  await env.DB.prepare(`UPDATE persons SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+  await env.DB
+    .prepare(`UPDATE persons SET ${updates.join(", ")} WHERE user_id = ? AND id = ?`)
+    .bind(...values, currentUser.id, personId)
+    .run();
 
-  const row = await env.DB.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
+  const row = await env.DB
+    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
+    .bind(currentUser.id, personId)
+    .first<PersonRow>();
 
   if (!row) {
     throw new HttpError(500, "Не вдалося оновити людину");
@@ -182,16 +198,21 @@ export async function updatePerson(request: Request, env: Env, personId: string)
   return json(mapPersonRow(row));
 }
 
-export async function deletePerson(env: Env, personId: string): Promise<Response> {
-  const existing = await getPersonById(env.DB, personId);
+export async function deletePerson(env: Env, currentUser: SessionUser, personId: string): Promise<Response> {
+  const existing = await getPersonById(env.DB, currentUser.id, personId);
 
   if (!existing) {
     throw new HttpError(404, "Людину не знайдено");
   }
 
+  if (currentUser.primaryPersonId === personId) {
+    throw new HttpError(400, "Не можна видалити власний профіль");
+  }
+
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM relationships WHERE person1_id = ? OR person2_id = ?").bind(personId, personId),
-    env.DB.prepare("DELETE FROM persons WHERE id = ?").bind(personId),
+    env.DB.prepare("DELETE FROM relationships WHERE user_id = ? AND (person1_id = ? OR person2_id = ?)")
+      .bind(currentUser.id, personId, personId),
+    env.DB.prepare("DELETE FROM persons WHERE user_id = ? AND id = ?").bind(currentUser.id, personId),
   ]);
 
   return noContent();
