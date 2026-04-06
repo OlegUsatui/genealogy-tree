@@ -1,0 +1,15 @@
+{
+  "name": "family-tree",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev --workspace @family-tree/api",
+    "dev:web": "npm run dev --workspace @family-tree/web",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

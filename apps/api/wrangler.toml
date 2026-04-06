@@ -1,0 +1,13 @@
+name = "family-tree-api"
+main = "src/index.ts"
+compatibility_date = "2026-04-06"
+
+[vars]
+SESSION_COOKIE_NAME = "ft_session"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "family-tree"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+

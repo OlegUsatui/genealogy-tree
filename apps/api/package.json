@@ -1,0 +1,23 @@
+{
+  "name": "@family-tree/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run",
+    "dev": "wrangler dev --local --port 8787",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply family-tree --local",
+    "db:seed:local": "wrangler d1 execute family-tree --local --file ./seed.sql"
+  },
+  "dependencies": {
+    "@family-tree/shared": "file:../../packages/shared"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260403.0",
+    "typescript": "^5.8.2",
+    "wrangler": "^4.11.1"
+  }
+}
+
