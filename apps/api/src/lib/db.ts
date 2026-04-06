@@ -5,6 +5,7 @@ import type { DbNullable } from "../types";
 type PersonRow = {
   id: string;
   user_id: string;
+  source_person_id: DbNullable<string>;
   first_name: string;
   last_name: DbNullable<string>;
   middle_name: DbNullable<string>;
@@ -36,6 +37,7 @@ type RelationshipRow = {
 export function mapPersonRow(row: PersonRow): Person {
   return {
     id: row.id,
+    sourcePersonId: row.source_person_id,
     firstName: row.first_name,
     lastName: row.last_name,
     middleName: row.middle_name,
@@ -75,6 +77,14 @@ export async function getPersonById(
     .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
     .bind(userId, personId)
     .first<PersonRow>();
+  return row ? mapPersonRow(row) : null;
+}
+
+export async function getPersonByIdGlobal(
+  db: D1Database,
+  personId: string,
+): Promise<Person | null> {
+  const row = await db.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
   return row ? mapPersonRow(row) : null;
 }
 

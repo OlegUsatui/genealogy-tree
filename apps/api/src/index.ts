@@ -1,7 +1,15 @@
 import type { SessionUser } from "@family-tree/shared";
 
 import { deleteAccount } from "./routes/account";
-import { deletePerson, getPerson, getPersons, createPerson, updatePerson } from "./routes/persons";
+import {
+  createPerson,
+  deletePerson,
+  getDirectoryPerson,
+  getPerson,
+  getPersons,
+  importDirectoryPerson,
+  updatePerson,
+} from "./routes/persons";
 import { createRelationship, deleteRelationship, getRelationships } from "./routes/relationships";
 import { getTree } from "./routes/tree";
 import { login, logout, me } from "./routes/auth";
@@ -14,6 +22,7 @@ import type { Env } from "./types";
 const protectedPrefixes = [
   "/api/account",
   "/api/persons",
+  "/api/directory",
   "/api/relationships",
   "/api/tree",
   "/api/search",
@@ -84,6 +93,22 @@ async function routeRequest(
 
   if (request.method === "GET" && pathname === "/api/persons") {
     return getPersons(env, requireAuthenticatedUser(currentUser));
+  }
+
+  const directoryPersonMatch = pathname.match(/^\/api\/directory\/persons\/([^/]+)$/);
+
+  if (directoryPersonMatch && request.method === "GET") {
+    return getDirectoryPerson(env, decodeURIComponent(directoryPersonMatch[1]));
+  }
+
+  const directoryPersonImportMatch = pathname.match(/^\/api\/directory\/persons\/([^/]+)\/import$/);
+
+  if (directoryPersonImportMatch && request.method === "POST") {
+    return importDirectoryPerson(
+      env,
+      requireAuthenticatedUser(currentUser),
+      decodeURIComponent(directoryPersonImportMatch[1]),
+    );
   }
 
   if (request.method === "POST" && pathname === "/api/persons") {

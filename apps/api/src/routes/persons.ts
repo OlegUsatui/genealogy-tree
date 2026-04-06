@@ -1,6 +1,6 @@
 import type { CreatePersonDto, SessionUser, UpdatePersonDto } from "@family-tree/shared";
 
-import { getPersonById, listPersons, mapPersonRow } from "../lib/db";
+import { getPersonById, getPersonByIdGlobal, listPersons, mapPersonRow } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
 import { normalizeCreatePersonDto, normalizeUpdatePersonDto, toDbBoolean } from "../lib/normalize";
 import type { Env } from "../types";
@@ -8,6 +8,7 @@ import type { Env } from "../types";
 type PersonRow = {
   id: string;
   user_id: string;
+  source_person_id: string | null;
   first_name: string;
   last_name: string | null;
   middle_name: string | null;
@@ -37,6 +38,102 @@ export async function getPerson(env: Env, currentUser: SessionUser, personId: st
   }
 
   return json(person);
+}
+
+export async function getDirectoryPerson(env: Env, personId: string): Promise<Response> {
+  const person = await getPersonByIdGlobal(env.DB, personId);
+
+  if (!person) {
+    throw new HttpError(404, "Людину не знайдено");
+  }
+
+  return json(person);
+}
+
+export async function importDirectoryPerson(
+  env: Env,
+  currentUser: SessionUser,
+  sourcePersonId: string,
+): Promise<Response> {
+  const sourcePerson = await env.DB
+    .prepare("SELECT * FROM persons WHERE id = ?")
+    .bind(sourcePersonId)
+    .first<PersonRow>();
+
+  if (!sourcePerson) {
+    throw new HttpError(404, "Людину не знайдено");
+  }
+
+  if (sourcePerson.user_id === currentUser.id) {
+    return json(mapPersonRow(sourcePerson));
+  }
+
+  const existingImportedPerson = await env.DB
+    .prepare("SELECT * FROM persons WHERE user_id = ? AND source_person_id = ?")
+    .bind(currentUser.id, sourcePersonId)
+    .first<PersonRow>();
+
+  if (existingImportedPerson) {
+    return json(mapPersonRow(existingImportedPerson));
+  }
+
+  const personId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+
+  await env.DB.prepare(
+    `
+      INSERT INTO persons (
+        id,
+        user_id,
+        source_person_id,
+        first_name,
+        last_name,
+        middle_name,
+        maiden_name,
+        gender,
+        birth_date,
+        death_date,
+        birth_place,
+        death_place,
+        biography,
+        is_living,
+        photo_url,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  )
+    .bind(
+      personId,
+      currentUser.id,
+      sourcePersonId,
+      sourcePerson.first_name,
+      sourcePerson.last_name,
+      sourcePerson.middle_name,
+      sourcePerson.maiden_name,
+      sourcePerson.gender,
+      sourcePerson.birth_date,
+      sourcePerson.death_date,
+      sourcePerson.birth_place,
+      sourcePerson.death_place,
+      sourcePerson.biography,
+      sourcePerson.is_living,
+      sourcePerson.photo_url,
+      timestamp,
+      timestamp,
+    )
+    .run();
+
+  const importedPerson = await env.DB
+    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
+    .bind(currentUser.id, personId)
+    .first<PersonRow>();
+
+  if (!importedPerson) {
+    throw new HttpError(500, "Не вдалося додати людину до вашого дерева");
+  }
+
+  return json(mapPersonRow(importedPerson), { status: 201 });
 }
 
 export async function createPerson(request: Request, env: Env, currentUser: SessionUser): Promise<Response> {

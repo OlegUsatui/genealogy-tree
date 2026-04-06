@@ -50,11 +50,10 @@ async function queryGlobalPersonCandidates(
   query: string,
   limit: number,
 ): Promise<PersonSearchCandidate[]> {
-  const searchTerm = `%${query}%`;
   const result = await env.DB.prepare(
     `
       SELECT
-        MIN(id) AS source_person_id,
+        id AS source_person_id,
         first_name,
         last_name,
         middle_name,
@@ -64,28 +63,33 @@ async function queryGlobalPersonCandidates(
         birth_place,
         is_living
       FROM persons
-      WHERE
-        first_name LIKE ?
-        OR last_name LIKE ?
-        OR middle_name LIKE ?
-        OR maiden_name LIKE ?
-      GROUP BY
-        first_name,
-        last_name,
-        middle_name,
-        maiden_name,
-        gender,
-        birth_date,
-        birth_place,
-        is_living
-      ORDER BY COALESCE(last_name, ''), first_name, birth_date
-      LIMIT ?
+      ORDER BY COALESCE(last_name, ''), first_name, birth_date, id
     `,
   )
-    .bind(searchTerm, searchTerm, searchTerm, searchTerm, limit)
+    .bind()
     .all<RegistrationCandidateRow>();
 
-  return result.results.map(mapRegistrationCandidateRow);
+  const normalizedQuery = normalizeSearchValue(query);
+  const candidates = new Map<string, RegistrationPersonCandidate>();
+
+  for (const row of result.results) {
+    if (!matchesSearchQuery(row, normalizedQuery)) {
+      continue;
+    }
+
+    const candidate = mapRegistrationCandidateRow(row);
+    const candidateKey = createCandidateKey(row);
+
+    if (!candidates.has(candidateKey)) {
+      candidates.set(candidateKey, candidate);
+    }
+
+    if (candidates.size >= limit) {
+      break;
+    }
+  }
+
+  return [...candidates.values()];
 }
 
 function mapRegistrationCandidateRow(row: RegistrationCandidateRow): RegistrationPersonCandidate {
@@ -100,4 +104,26 @@ function mapRegistrationCandidateRow(row: RegistrationCandidateRow): Registratio
     birthPlace: row.birth_place,
     isLiving: row.is_living === null ? null : row.is_living === 1,
   };
+}
+
+function matchesSearchQuery(row: RegistrationCandidateRow, normalizedQuery: string): boolean {
+  return [row.first_name, row.last_name, row.middle_name, row.maiden_name]
+    .some((value) => normalizeSearchValue(value).includes(normalizedQuery));
+}
+
+function normalizeSearchValue(value: string | null | undefined): string {
+  return (value ?? "").trim().toLocaleLowerCase("uk-UA");
+}
+
+function createCandidateKey(row: RegistrationCandidateRow): string {
+  return [
+    row.first_name,
+    row.last_name ?? "",
+    row.middle_name ?? "",
+    row.maiden_name ?? "",
+    row.gender,
+    row.birth_date ?? "",
+    row.birth_place ?? "",
+    row.is_living === null ? "" : String(row.is_living),
+  ].join("\u0000");
 }

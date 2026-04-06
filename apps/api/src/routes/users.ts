@@ -29,6 +29,7 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
   const primaryPersonId = crypto.randomUUID();
   const timestamp = new Date().toISOString();
   const passwordHash = await hashPassword(input.password, crypto.randomUUID());
+  const sourcePersonId = input.personMode === "existing" ? input.existingPersonId ?? null : null;
   const primaryPerson = input.personMode === "existing"
     ? await getExistingPersonTemplate(env.DB, input.existingPersonId!)
     : input.person!;
@@ -52,6 +53,7 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
         INSERT INTO persons (
           id,
           user_id,
+          source_person_id,
           first_name,
           last_name,
           middle_name,
@@ -66,12 +68,13 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
           photo_url,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
       .bind(
         primaryPersonId,
         userId,
+        sourcePersonId,
         primaryPerson.firstName,
         primaryPerson.lastName,
         primaryPerson.middleName,

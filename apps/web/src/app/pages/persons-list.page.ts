@@ -47,12 +47,18 @@ import { SearchService } from "../services/search.service";
           <h2>Результати пошуку</h2>
 
           <div class="person-grid" *ngIf="searchResults().length > 0; else noSearchResults">
-            <mat-card class="person-card" *ngFor="let person of searchResults()">
-              <div class="person-copy">
-                <h3>{{ displaySearchName(person) }}</h3>
-                <p class="muted">{{ displaySearchMeta(person) }}</p>
-              </div>
-            </mat-card>
+            <a
+              *ngFor="let person of searchResults()"
+              [routerLink]="['/persons', person.sourcePersonId]"
+              class="search-result-link"
+            >
+              <mat-card class="person-card search-result-card">
+                <div class="person-copy">
+                  <h3>{{ displaySearchName(person) }}</h3>
+                  <p class="muted">{{ displaySearchMeta(person) }}</p>
+                </div>
+              </mat-card>
+            </a>
           </div>
 
           <ng-template #noSearchResults>
@@ -146,6 +152,22 @@ import { SearchService } from "../services/search.service";
         flex-direction: column;
         gap: 14px;
         padding: 6px;
+      }
+
+      .search-result-link {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .search-result-card {
+        height: 100%;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .search-result-link:hover .search-result-card,
+      .search-result-link:focus-visible .search-result-card {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 34px rgba(19, 33, 45, 0.12);
       }
 
       .person-card h3 {

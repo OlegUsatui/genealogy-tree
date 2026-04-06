@@ -4,6 +4,7 @@ export type RelationshipType = "parent_child" | "spouse";
 
 export interface Person {
   id: string;
+  sourcePersonId?: string | null;
   firstName: string;
   lastName: string | null;
   middleName: string | null;

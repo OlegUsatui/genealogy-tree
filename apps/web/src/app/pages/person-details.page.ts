@@ -5,6 +5,7 @@ import { HttpErrorResponse } from "@angular/common/http";
 import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
+import { MatSnackBar } from "@angular/material/snack-bar";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
 import { MATERIAL_IMPORTS } from "../material";
@@ -18,169 +19,186 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
-    <section class="app-page page-layout" *ngIf="person() as person">
-      <mat-card class="profile-card">
-        <div class="profile-header">
-          <div class="profile-copy">
-            <mat-chip-set>
-              <mat-chip>Профіль</mat-chip>
-            </mat-chip-set>
-            <h1>{{ displayName(person) }}</h1>
-            <p class="muted">{{ person.biography || "Біографія ще не додана." }}</p>
-          </div>
-
-          <div class="profile-actions">
-            <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id, 'edit']" class="action-link">Редагувати</a>
-            <a mat-button [routerLink]="['/tree', person.id]" class="action-link">Відкрити дерево</a>
-            <button mat-stroked-button type="button" class="danger-button" (click)="deletePerson()">Видалити</button>
-          </div>
-        </div>
-
-        <div class="details-grid">
-          <mat-card appearance="outlined" class="detail-item"><span>Стать</span><strong>{{ genderLabel(person.gender) }}</strong></mat-card>
-          <mat-card appearance="outlined" class="detail-item"><span>Дата народження</span><strong>{{ person.birthDate || "—" }}</strong></mat-card>
-          <mat-card appearance="outlined" class="detail-item"><span>Дата смерті</span><strong>{{ person.deathDate || "—" }}</strong></mat-card>
-          <mat-card appearance="outlined" class="detail-item"><span>Місце народження</span><strong>{{ person.birthPlace || "—" }}</strong></mat-card>
-          <mat-card appearance="outlined" class="detail-item"><span>Місце смерті</span><strong>{{ person.deathPlace || "—" }}</strong></mat-card>
-          <mat-card appearance="outlined" class="detail-item"><span>Посилання на фото</span><strong>{{ person.photoUrl || "—" }}</strong></mat-card>
-        </div>
-      </mat-card>
-
+    <section class="app-page page-layout">
       <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
 
-      <mat-card class="relationships-card">
-        <div class="section-heading">
-          <div>
-            <h2>Родинні зв’язки</h2>
-            <p class="muted">Зберігаються тільки зв’язки батьки-діти та партнери. Похідні зв’язки окремо не зберігаються.</p>
-          </div>
-        </div>
-
-        <div class="relationship-groups">
-          <div class="relationship-column">
-            <div class="column-heading">
-              <h3>Батьки</h3>
+      <ng-container *ngIf="person() as person">
+        <mat-card class="profile-card">
+          <div class="profile-header">
+            <div class="profile-copy">
               <mat-chip-set>
-                <mat-chip>{{ parents().length }}</mat-chip>
+                <mat-chip>Профіль</mat-chip>
               </mat-chip-set>
+              <h1>{{ displayName(person) }}</h1>
+              <p class="muted">{{ person.biography || "Біографія ще не додана." }}</p>
             </div>
-            <div *ngIf="parents().length > 0; else emptyParents">
-              <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of parents()">
-                <div>
-                  <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                    {{ displayName(item.relatedPerson) }}
-                  </a>
-                  <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
-                </div>
-                <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-              </mat-card>
+
+            <div class="profile-actions" *ngIf="isOwnProfile(); else readOnlyProfileNotice">
+              <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id, 'edit']" class="action-link">Редагувати</a>
+              <a mat-button [routerLink]="['/tree', person.id]" class="action-link">Відкрити дерево</a>
+              <button mat-stroked-button type="button" class="danger-button" (click)="deletePerson()">Видалити</button>
             </div>
-            <ng-template #emptyParents><div class="empty-state">Батьки не вказані.</div></ng-template>
+
+            <ng-template #readOnlyProfileNotice>
+              <div class="profile-notice">
+                <mat-chip-set>
+                  <mat-chip>Профіль з іншого акаунта</mat-chip>
+                </mat-chip-set>
+                <p class="muted">Щоб прив’язати цю людину до свого дерева, додай зв’язок у блоці нижче.</p>
+              </div>
+            </ng-template>
           </div>
 
-          <div class="relationship-column">
-            <div class="column-heading">
-              <h3>Партнери</h3>
-              <mat-chip-set>
-                <mat-chip>{{ spouses().length }}</mat-chip>
-              </mat-chip-set>
+          <div class="details-grid">
+            <mat-card appearance="outlined" class="detail-item"><span>Стать</span><strong>{{ genderLabel(person.gender) }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item"><span>Дата народження</span><strong>{{ person.birthDate || "—" }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item"><span>Дата смерті</span><strong>{{ person.deathDate || "—" }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item"><span>Місце народження</span><strong>{{ person.birthPlace || "—" }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item"><span>Місце смерті</span><strong>{{ person.deathPlace || "—" }}</strong></mat-card>
+            <mat-card appearance="outlined" class="detail-item"><span>Посилання на фото</span><strong>{{ person.photoUrl || "—" }}</strong></mat-card>
+          </div>
+        </mat-card>
+
+        <mat-card class="relationships-card" *ngIf="isOwnProfile()">
+          <div class="section-heading">
+            <div>
+              <h2>Родинні зв’язки</h2>
+              <p class="muted">Зберігаються тільки зв’язки батьки-діти та партнери. Похідні зв’язки окремо не зберігаються.</p>
             </div>
-            <div *ngIf="spouses().length > 0; else emptySpouses">
-              <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of spouses()">
-                <div>
-                  <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                    {{ displayName(item.relatedPerson) }}
-                  </a>
-                  <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
-                </div>
-                <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-              </mat-card>
-            </div>
-            <ng-template #emptySpouses><div class="empty-state">Партнери не вказані.</div></ng-template>
           </div>
 
-          <div class="relationship-column">
-            <div class="column-heading">
-              <h3>Діти</h3>
-              <mat-chip-set>
-                <mat-chip>{{ children().length }}</mat-chip>
-              </mat-chip-set>
+          <div class="relationship-groups">
+            <div class="relationship-column">
+              <div class="column-heading">
+                <h3>Батьки</h3>
+                <mat-chip-set>
+                  <mat-chip>{{ parents().length }}</mat-chip>
+                </mat-chip-set>
+              </div>
+              <div *ngIf="parents().length > 0; else emptyParents">
+                <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of parents()">
+                  <div>
+                    <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                      {{ displayName(item.relatedPerson) }}
+                    </a>
+                    <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
+                  </div>
+                  <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                </mat-card>
+              </div>
+              <ng-template #emptyParents><div class="empty-state">Батьки не вказані.</div></ng-template>
             </div>
-            <div *ngIf="children().length > 0; else emptyChildren">
-              <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of children()">
-                <div>
-                  <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                    {{ displayName(item.relatedPerson) }}
-                  </a>
-                  <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
-                </div>
-                <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-              </mat-card>
+
+            <div class="relationship-column">
+              <div class="column-heading">
+                <h3>Партнери</h3>
+                <mat-chip-set>
+                  <mat-chip>{{ spouses().length }}</mat-chip>
+                </mat-chip-set>
+              </div>
+              <div *ngIf="spouses().length > 0; else emptySpouses">
+                <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of spouses()">
+                  <div>
+                    <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                      {{ displayName(item.relatedPerson) }}
+                    </a>
+                    <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
+                  </div>
+                  <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                </mat-card>
+              </div>
+              <ng-template #emptySpouses><div class="empty-state">Партнери не вказані.</div></ng-template>
             </div>
-            <ng-template #emptyChildren><div class="empty-state">Діти не вказані.</div></ng-template>
-          </div>
-        </div>
-      </mat-card>
 
-      <mat-card class="relationship-form-card">
-        <div class="section-heading">
-          <div>
-            <h2>Додати зв’язок</h2>
-            <p class="muted">Вкажіть тип і другу людину. Для зв’язку батьки-діти виберіть напрямок.</p>
+            <div class="relationship-column">
+              <div class="column-heading">
+                <h3>Діти</h3>
+                <mat-chip-set>
+                  <mat-chip>{{ children().length }}</mat-chip>
+                </mat-chip-set>
+              </div>
+              <div *ngIf="children().length > 0; else emptyChildren">
+                <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of children()">
+                  <div>
+                    <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                      {{ displayName(item.relatedPerson) }}
+                    </a>
+                    <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
+                  </div>
+                  <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                </mat-card>
+              </div>
+              <ng-template #emptyChildren><div class="empty-state">Діти не вказані.</div></ng-template>
+            </div>
           </div>
-        </div>
+        </mat-card>
 
-        <form [formGroup]="relationshipForm" (ngSubmit)="createRelationship()" class="form-grid">
-          <div class="field-grid">
+        <mat-card class="relationship-form-card">
+          <div class="section-heading">
+            <div>
+              <h2>Додати зв’язок</h2>
+              <p class="muted">
+                {{
+                  isOwnProfile()
+                    ? "Вкажіть тип і другу людину. Для зв’язку батьки-діти виберіть напрямок."
+                    : "Виберіть людину зі свого дерева. Якщо потрібно, цей профіль буде автоматично доданий у ваше дерево під час створення зв’язку."
+                }}
+              </p>
+            </div>
+          </div>
+
+          <form [formGroup]="relationshipForm" (ngSubmit)="createRelationship()" class="form-grid">
+            <div class="field-grid">
+              <mat-form-field appearance="outline">
+                <mat-label>Тип зв’язку</mat-label>
+                <mat-select id="type" formControlName="type">
+                  <mat-option value="parent_child">батьки-діти</mat-option>
+                  <mat-option value="spouse">партнери</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'parent_child'">
+                <mat-label>Напрямок</mat-label>
+                <mat-select id="direction" formControlName="direction">
+                  <mat-option value="current_is_parent">Поточна людина є батьком / матір’ю</mat-option>
+                  <mat-option value="current_is_child">Поточна людина є дитиною</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>{{ isOwnProfile() ? "Інша людина" : "Людина з вашого дерева" }}</mat-label>
+                <mat-select id="relatedPersonId" formControlName="relatedPersonId">
+                  <mat-option value="">Оберіть людину</mat-option>
+                  <mat-option *ngFor="let candidate of relationshipCandidates()" [value]="candidate.id">
+                    {{ displayName(candidate) }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'spouse'">
+                <mat-label>Дата початку стосунків</mat-label>
+                <input matInput id="startDate" type="date" formControlName="startDate">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'spouse'">
+                <mat-label>Дата завершення стосунків</mat-label>
+                <input matInput id="endDate" type="date" formControlName="endDate">
+              </mat-form-field>
+            </div>
+
             <mat-form-field appearance="outline">
-              <mat-label>Тип зв’язку</mat-label>
-              <mat-select id="type" formControlName="type">
-                <mat-option value="parent_child">батьки-діти</mat-option>
-                <mat-option value="spouse">партнери</mat-option>
-              </mat-select>
+              <mat-label>Нотатки</mat-label>
+              <textarea matInput id="notes" formControlName="notes"></textarea>
             </mat-form-field>
 
-            <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'parent_child'">
-              <mat-label>Напрямок</mat-label>
-              <mat-select id="direction" formControlName="direction">
-                <mat-option value="current_is_parent">Поточна людина є батьком / матір’ю</mat-option>
-                <mat-option value="current_is_child">Поточна людина є дитиною</mat-option>
-              </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Інша людина</mat-label>
-              <mat-select id="relatedPersonId" formControlName="relatedPersonId">
-                <mat-option value="">Оберіть людину</mat-option>
-                <mat-option *ngFor="let candidate of relationshipCandidates()" [value]="candidate.id">
-                  {{ displayName(candidate) }}
-                </mat-option>
-              </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Початок</mat-label>
-              <input matInput id="startDate" type="date" formControlName="startDate">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Кінець</mat-label>
-              <input matInput id="endDate" type="date" formControlName="endDate">
-            </mat-form-field>
-          </div>
-
-          <mat-form-field appearance="outline">
-            <mat-label>Нотатки</mat-label>
-            <textarea matInput id="notes" formControlName="notes"></textarea>
-          </mat-form-field>
-
-          <div class="form-actions">
-            <button mat-flat-button color="primary" type="submit" [disabled]="relationshipForm.invalid || isSubmittingRelationship()">
-              {{ isSubmittingRelationship() ? "Додавання..." : "Додати зв’язок" }}
-            </button>
-          </div>
-        </form>
-      </mat-card>
+            <div class="form-actions">
+              <button mat-flat-button color="primary" type="submit" [disabled]="relationshipForm.invalid || isSubmittingRelationship()">
+                {{ isSubmittingRelationship() ? "Додавання..." : "Додати зв’язок" }}
+              </button>
+            </div>
+          </form>
+        </mat-card>
+      </ng-container>
     </section>
   `,
   styles: [
@@ -217,6 +235,17 @@ type RelationshipDirection = "current_is_parent" | "current_is_child";
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+      }
+
+      .profile-notice {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .profile-notice p {
+        margin: 0;
+        max-width: 280px;
       }
 
       .danger-button {
@@ -323,11 +352,13 @@ export class PersonDetailsPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly personsService = inject(PersonsService);
   private readonly relationshipsService = inject(RelationshipsService);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly person = signal<Person | null>(null);
   readonly allPersons = signal<Person[]>([]);
   readonly relationships = signal<Relationship[]>([]);
   readonly errorMessage = signal("");
+  readonly isOwnProfile = signal(false);
   readonly isSubmittingRelationship = signal(false);
 
   readonly relationshipForm = new FormGroup({
@@ -349,6 +380,15 @@ export class PersonDetailsPageComponent {
   });
 
   constructor() {
+    this.relationshipForm.controls.type.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((type) => {
+      if (type !== "spouse") {
+        this.relationshipForm.patchValue({
+          startDate: "",
+          endDate: "",
+        });
+      }
+    });
+
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const personId = params.get("id");
 
@@ -360,7 +400,12 @@ export class PersonDetailsPageComponent {
 
   relationshipCandidates(): Person[] {
     const currentId = this.person()?.id;
-    return this.allPersons().filter((candidate) => candidate.id !== currentId);
+
+    if (this.isOwnProfile()) {
+      return this.allPersons().filter((candidate) => candidate.id !== currentId);
+    }
+
+    return this.allPersons().filter((candidate) => candidate.sourcePersonId !== currentId);
   }
 
   parents(): RelationshipView[] {
@@ -435,17 +480,25 @@ export class PersonDetailsPageComponent {
 
     try {
       const value = this.relationshipForm.getRawValue();
-      const payload = buildRelationshipPayload(currentPerson.id, value);
+      const localCurrentPerson = this.isOwnProfile()
+        ? currentPerson
+        : await awaitOne<Person>(this.personsService.importDirectoryPerson(currentPerson.id));
+
+      if (localCurrentPerson.id === value.relatedPersonId) {
+        this.errorMessage.set("Не можна створити зв’язок людини самої з собою");
+        return;
+      }
+
+      const payload = buildRelationshipPayload(localCurrentPerson.id, value);
       await awaitOne<Relationship>(this.relationshipsService.create(payload));
-      this.relationshipForm.reset({
-        type: "parent_child",
-        direction: "current_is_parent",
-        relatedPersonId: "",
-        startDate: "",
-        endDate: "",
-        notes: "",
-      });
-      await this.loadPage(currentPerson.id);
+      this.resetRelationshipForm();
+
+      if (this.isOwnProfile()) {
+        await this.loadPage(currentPerson.id);
+      } else {
+        this.snackBar.open("Зв’язок додано до вашого дерева", "Закрити", { duration: 3000 });
+        await this.router.navigate(["/persons", localCurrentPerson.id]);
+      }
     } catch (error) {
       this.errorMessage.set(readApiError(error));
     } finally {
@@ -456,7 +509,7 @@ export class PersonDetailsPageComponent {
   async deleteRelationship(relationshipId: string): Promise<void> {
     const currentPerson = this.person();
 
-    if (!currentPerson) {
+    if (!currentPerson || !this.isOwnProfile()) {
       return;
     }
 
@@ -471,7 +524,7 @@ export class PersonDetailsPageComponent {
   async deletePerson(): Promise<void> {
     const currentPerson = this.person();
 
-    if (!currentPerson) {
+    if (!currentPerson || !this.isOwnProfile()) {
       return;
     }
 
@@ -491,20 +544,42 @@ export class PersonDetailsPageComponent {
 
   private async loadPage(personId: string): Promise<void> {
     this.errorMessage.set("");
+    this.person.set(null);
+    this.relationships.set([]);
+    this.isOwnProfile.set(false);
 
     try {
-      const [person, persons, relationships] = await Promise.all([
-        awaitOne<Person>(this.personsService.get(personId)),
-        awaitOne<Person[]>(this.personsService.list()),
-        awaitOne<Relationship[]>(this.relationshipsService.list(personId)),
-      ]);
+      const persons = await awaitOne<Person[]>(this.personsService.list());
+      const isOwnProfile = persons.some((person) => person.id === personId);
+      const person = isOwnProfile
+        ? await awaitOne<Person>(this.personsService.get(personId))
+        : await awaitOne<Person>(this.personsService.getDirectoryPerson(personId));
+      const relationships = isOwnProfile
+        ? await awaitOne<Relationship[]>(this.relationshipsService.list(personId))
+        : [];
 
       this.person.set(person);
       this.allPersons.set(persons);
       this.relationships.set(relationships);
+      this.isOwnProfile.set(isOwnProfile);
     } catch (error) {
+      this.allPersons.set([]);
+      this.person.set(null);
+      this.relationships.set([]);
+      this.isOwnProfile.set(false);
       this.errorMessage.set(readApiError(error));
     }
+  }
+
+  private resetRelationshipForm(): void {
+    this.relationshipForm.reset({
+      type: "parent_child",
+      direction: "current_is_parent",
+      relatedPersonId: "",
+      startDate: "",
+      endDate: "",
+      notes: "",
+    });
   }
 
   private createRelationshipView(

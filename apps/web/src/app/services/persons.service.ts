@@ -18,6 +18,14 @@ export class PersonsService {
     return this.api.get<Person>(`/persons/${personId}`);
   }
 
+  getDirectoryPerson(personId: string) {
+    return this.api.get<Person>(`/directory/persons/${personId}`);
+  }
+
+  importDirectoryPerson(personId: string) {
+    return this.api.post<Person>(`/directory/persons/${personId}/import`, {});
+  }
+
   create(payload: CreatePersonDto) {
     return this.api.post<Person>("/persons", payload);
   }
