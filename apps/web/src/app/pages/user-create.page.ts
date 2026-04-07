@@ -461,7 +461,6 @@ export class UserCreatePageComponent {
       await this.router.navigate(["/login"], {
         queryParams: {
           created: "1",
-          email: createdUser.email,
         },
       });
     } catch (error) {

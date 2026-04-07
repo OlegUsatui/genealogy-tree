@@ -17,8 +17,7 @@ import { AuthService } from "../services/auth.service";
         <div class="login-copy">
           <h1>Вхід до родинного дерева</h1>
           <p>
-            Простий приватний інструмент для ведення сімейного дерева. Для локального старту
-            використовуйте тестового користувача.
+            Керуйте родинними профілями, зв’язками та деревом в одному місці.
           </p>
         </div>
 
@@ -42,11 +41,6 @@ import { AuthService } from "../services/auth.service";
           <a mat-stroked-button color="primary" routerLink="/users/new" class="signup-link">
             Створити нового користувача
           </a>
-
-          <mat-card class="seed-hint" appearance="outlined">
-            <strong>Тестовий вхід:</strong>
-            <span><code>admin&#64;example.com</code> / <code>admin12345</code></span>
-          </mat-card>
         </form>
       </mat-card>
     </section>
@@ -83,14 +77,6 @@ import { AuthService } from "../services/auth.service";
         flex-direction: column;
         gap: 16px;
         border-radius: 22px;
-      }
-
-      .seed-hint {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 14px;
-        color: var(--muted);
       }
 
       .signup-link {
@@ -135,11 +121,11 @@ export class LoginPageComponent {
   readonly errorMessage = signal("");
 
   readonly form = new FormGroup({
-    email: new FormControl("admin@example.com", {
+    email: new FormControl("", {
       nonNullable: true,
       validators: [Validators.required, Validators.email],
     }),
-    password: new FormControl("admin12345", {
+    password: new FormControl("", {
       nonNullable: true,
       validators: [Validators.required],
     }),
@@ -148,12 +134,6 @@ export class LoginPageComponent {
   constructor() {
     const created = this.route.snapshot.queryParamMap.get("created");
     const accountDeleted = this.route.snapshot.queryParamMap.get("accountDeleted");
-    const email = this.route.snapshot.queryParamMap.get("email");
-
-    if (email) {
-      this.form.controls.email.setValue(email);
-      this.form.controls.password.setValue("");
-    }
 
     if (created === "1") {
       this.snackBar.open("Користувача створено. Тепер він може увійти в систему.", "Закрити", {
@@ -167,7 +147,6 @@ export class LoginPageComponent {
           relativeTo: this.route,
           queryParams: {
             created: null,
-            email: null,
           },
           queryParamsHandling: "merge",
           replaceUrl: true,

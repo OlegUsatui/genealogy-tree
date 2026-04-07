@@ -25,7 +25,7 @@ type LivingOption = "unknown" | "true" | "false";
         <div class="form-header">
           <div>
             <h1>{{ personId() ? "Редагувати людину" : "Нова людина" }}</h1>
-            <p class="muted">Заповніть базові дані профілю. Для MVP цього достатньо.</p>
+            <p class="muted">Заповніть дані профілю та за потреби додайте фотографію.</p>
           </div>
 
           <a mat-stroked-button color="primary" routerLink="/persons" class="form-link">До списку</a>
