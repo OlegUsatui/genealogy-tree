@@ -81,7 +81,7 @@ import { SearchService } from "../services/search.service";
         <div class="person-grid" *ngIf="filteredPersons().length > 0; else mineEmptyState">
           <mat-card
             class="person-card interactive-card"
-            *ngFor="let person of filteredPersons()"
+            *ngFor="let person of pagedPersons()"
             tabindex="0"
             role="link"
             (click)="goToPerson(person.id)"
@@ -109,6 +109,30 @@ import { SearchService } from "../services/search.service";
               </a>
             </mat-card-actions>
           </mat-card>
+        </div>
+
+        <div class="pagination-bar" *ngIf="hasLocalPagination()">
+          <p class="muted pagination-meta">{{ localPageStart() }}-{{ localPageEnd() }} з {{ filteredPersons().length }}</p>
+
+          <div class="pagination-actions">
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="goToPreviousLocalPage()"
+              [disabled]="activeLocalPage() === 1"
+            >
+              Назад
+            </button>
+            <span class="pagination-current">{{ activeLocalPage() }} / {{ localTotalPages() }}</span>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="goToNextLocalPage()"
+              [disabled]="activeLocalPage() >= localTotalPages()"
+            >
+              Далі
+            </button>
+          </div>
         </div>
 
         <ng-template #mineEmptyState>
@@ -362,6 +386,32 @@ import { SearchService } from "../services/search.service";
         margin: -4px 0 0;
       }
 
+      .pagination-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .pagination-meta {
+        margin: 0;
+      }
+
+      .pagination-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .pagination-current {
+        min-width: 72px;
+        text-align: center;
+        font-weight: 700;
+        color: #24415f;
+      }
+
       .person-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
@@ -527,6 +577,15 @@ import { SearchService } from "../services/search.service";
           margin-right: 0;
         }
 
+        .pagination-bar,
+        .pagination-actions {
+          width: 100%;
+        }
+
+        .pagination-actions > .mat-mdc-button-base {
+          flex: 1 1 0;
+        }
+
         .empty-actions > .mat-mdc-button-base,
         .empty-actions > .action-link {
           width: 100%;
@@ -539,12 +598,14 @@ export class PersonsListPageComponent {
   private readonly personsService = inject(PersonsService);
   private readonly searchService = inject(SearchService);
   private readonly router = inject(Router);
+  private readonly pageSize = 10;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private latestSearchToken = 0;
 
   readonly mode = signal<"mine" | "directory">("mine");
   readonly persons = signal<Person[]>([]);
   readonly localQuery = signal("");
+  readonly currentLocalPage = signal(1);
   readonly directoryQuery = signal("");
   readonly searchResults = signal<PersonSearchCandidate[]>([]);
   readonly listErrorMessage = signal("");
@@ -560,6 +621,13 @@ export class PersonsListPageComponent {
 
     return this.persons().filter((person) => buildLocalPersonIndex(person).includes(query));
   });
+  readonly localTotalPages = computed(() => Math.max(1, Math.ceil(this.filteredPersons().length / this.pageSize)));
+  readonly activeLocalPage = computed(() => Math.min(this.currentLocalPage(), this.localTotalPages()));
+  readonly pagedPersons = computed(() => {
+    const startIndex = (this.activeLocalPage() - 1) * this.pageSize;
+    return this.filteredPersons().slice(startIndex, startIndex + this.pageSize);
+  });
+  readonly hasLocalPagination = computed(() => this.filteredPersons().length > this.pageSize);
 
   readonly showDirectoryIntro = computed(() => this.directoryQuery().trim().length === 0);
   readonly showDirectoryMinLengthHint = computed(() => {
@@ -588,10 +656,12 @@ export class PersonsListPageComponent {
 
   onLocalQueryChange(query: string): void {
     this.localQuery.set(query);
+    this.currentLocalPage.set(1);
   }
 
   clearLocalQuery(): void {
     this.localQuery.set("");
+    this.currentLocalPage.set(1);
   }
 
   clearDirectoryQuery(): void {
@@ -649,6 +719,18 @@ export class PersonsListPageComponent {
     return birthPlace || "Місце народження не вказано";
   }
 
+  localPageStart(): number {
+    if (this.filteredPersons().length === 0) {
+      return 0;
+    }
+
+    return (this.activeLocalPage() - 1) * this.pageSize + 1;
+  }
+
+  localPageEnd(): number {
+    return Math.min(this.activeLocalPage() * this.pageSize, this.filteredPersons().length);
+  }
+
   remainingDirectoryCharacters(): number {
     return Math.max(0, 3 - this.directoryQuery().trim().length);
   }
@@ -664,6 +746,14 @@ export class PersonsListPageComponent {
   onPersonCardKeydown(event: Event, personId: string): void {
     event.preventDefault();
     this.goToPerson(personId);
+  }
+
+  goToPreviousLocalPage(): void {
+    this.currentLocalPage.update((page) => Math.max(1, page - 1));
+  }
+
+  goToNextLocalPage(): void {
+    this.currentLocalPage.update((page) => Math.min(this.localTotalPages(), page + 1));
   }
 
   private async loadPersons(): Promise<void> {

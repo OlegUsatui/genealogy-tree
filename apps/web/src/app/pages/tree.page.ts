@@ -83,7 +83,11 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
                     {{ line }}
                   </tspan>
                 </text>
-                <text class="tree-node-meta" x="18" y="92">{{ labelBottom(node.person) }}</text>
+                <text class="tree-node-meta" x="18" y="84">
+                  <tspan *ngFor="let line of metaLines(node.person); let index = index" x="18" [attr.dy]="index === 0 ? 0 : 15">
+                    {{ line }}
+                  </tspan>
+                </text>
               </g>
             </svg>
           </div>
@@ -320,6 +324,14 @@ export class TreePageComponent {
     startPanY: number;
     moved: boolean;
   } | null = null;
+  private readonly activePointers = new Map<number, { x: number; y: number }>();
+  private pinchState: {
+    pointerIds: [number, number];
+    startDistance: number;
+    startZoom: number;
+    anchorContentX: number;
+    anchorContentY: number;
+  } | null = null;
   private suppressNodeClick = false;
 
   constructor() {
@@ -356,11 +368,12 @@ export class TreePageComponent {
     return `translate3d(${this.panX()}px, ${this.panY()}px, 0) scale(${this.zoom()})`;
   }
 
-  labelBottom(person: Person): string {
-    const labels = [person.birthDate, person.birthPlace, person.deathDate ? `† ${person.deathDate}` : null].filter(
-      Boolean,
-    );
-    return truncate(labels.join(" • ") || "Дані не вказані", 34);
+  metaLines(person: Person): string[] {
+    return wrapNodeMeta([
+      person.birthDate,
+      person.birthPlace,
+      person.deathDate ? `† ${person.deathDate}` : null,
+    ]);
   }
 
   nodeRoleLabel(node: TreeDiagramNode): string {
@@ -402,13 +415,20 @@ export class TreePageComponent {
   }
 
   startPan(event: PointerEvent): void {
-    if (event.button !== 0) {
-      return;
-    }
-
     const viewport = event.currentTarget;
 
     if (!(viewport instanceof HTMLElement)) {
+      return;
+    }
+
+    this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (this.activePointers.size === 2) {
+      this.beginPinch(viewport);
+      return;
+    }
+
+    if (event.button !== 0 || this.activePointers.size > 1) {
       return;
     }
 
@@ -429,9 +449,44 @@ export class TreePageComponent {
   }
 
   movePan(event: PointerEvent): void {
+    if (this.activePointers.has(event.pointerId)) {
+      this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (this.pinchState) {
+      const [firstPointerId, secondPointerId] = this.pinchState.pointerIds;
+      const firstPointer = this.activePointers.get(firstPointerId);
+      const secondPointer = this.activePointers.get(secondPointerId);
+
+      if (!firstPointer || !secondPointer) {
+        return;
+      }
+
+      const viewport = event.currentTarget;
+
+      if (!(viewport instanceof HTMLElement)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const rect = viewport.getBoundingClientRect();
+      const midpointX = (firstPointer.x + secondPointer.x) / 2 - rect.left;
+      const midpointY = (firstPointer.y + secondPointer.y) / 2 - rect.top;
+      const distance = measurePointerDistance(firstPointer, secondPointer);
+      const nextZoom = clamp((distance / this.pinchState.startDistance) * this.pinchState.startZoom, this.minZoom, this.maxZoom);
+
+      this.zoom.set(nextZoom);
+      this.panX.set(midpointX - this.pinchState.anchorContentX * nextZoom);
+      this.panY.set(midpointY - this.pinchState.anchorContentY * nextZoom);
+      return;
+    }
+
     if (!this.panState || event.pointerId !== this.panState.pointerId) {
       return;
     }
+
+    event.preventDefault();
 
     const deltaX = event.clientX - this.panState.startX;
     const deltaY = event.clientY - this.panState.startY;
@@ -442,6 +497,21 @@ export class TreePageComponent {
   }
 
   endPan(event: PointerEvent): void {
+    this.activePointers.delete(event.pointerId);
+
+    if (this.pinchState) {
+      const viewport = event.currentTarget;
+
+      if (viewport instanceof HTMLElement && viewport.hasPointerCapture(event.pointerId)) {
+        viewport.releasePointerCapture(event.pointerId);
+      }
+
+      if (this.activePointers.size < 2 || this.pinchState.pointerIds.includes(event.pointerId)) {
+        this.pinchState = null;
+        this.suppressNodeClickOnce();
+      }
+    }
+
     if (!this.panState || event.pointerId !== this.panState.pointerId) {
       return;
     }
@@ -457,10 +527,7 @@ export class TreePageComponent {
     this.isPanning.set(false);
 
     if (moved) {
-      this.suppressNodeClick = true;
-      window.setTimeout(() => {
-        this.suppressNodeClick = false;
-      }, 0);
+      this.suppressNodeClickOnce();
     }
   }
 
@@ -524,6 +591,46 @@ export class TreePageComponent {
     this.panY.set(anchorViewportY - anchorContentY * clampedZoom);
   }
 
+  private beginPinch(viewport: HTMLElement): void {
+    const pointers = [...this.activePointers.entries()];
+
+    if (pointers.length < 2) {
+      return;
+    }
+
+    const [[firstPointerId, firstPointer], [secondPointerId, secondPointer]] = pointers;
+    const startDistance = measurePointerDistance(firstPointer, secondPointer);
+
+    if (startDistance < 8) {
+      return;
+    }
+
+    if (this.panState) {
+      if (viewport.hasPointerCapture(this.panState.pointerId)) {
+        viewport.releasePointerCapture(this.panState.pointerId);
+      }
+
+      this.panState = null;
+      this.isPanning.set(false);
+    }
+
+    viewport.setPointerCapture(firstPointerId);
+    viewport.setPointerCapture(secondPointerId);
+
+    const rect = viewport.getBoundingClientRect();
+    const midpointX = (firstPointer.x + secondPointer.x) / 2 - rect.left;
+    const midpointY = (firstPointer.y + secondPointer.y) / 2 - rect.top;
+    const currentZoom = this.zoom();
+
+    this.pinchState = {
+      pointerIds: [firstPointerId, secondPointerId],
+      startDistance,
+      startZoom: currentZoom,
+      anchorContentX: (midpointX - this.panX()) / currentZoom,
+      anchorContentY: (midpointY - this.panY()) / currentZoom,
+    };
+  }
+
   private getDefaultRootPersonId(persons: Person[]): string {
     const primaryPersonId = this.authService.user()?.primaryPersonId;
 
@@ -568,6 +675,13 @@ export class TreePageComponent {
 
     this.panX.set(viewport.clientWidth / 2 - rootCenterX);
     this.panY.set(viewport.clientHeight / 2 - rootCenterY);
+  }
+
+  private suppressNodeClickOnce(): void {
+    this.suppressNodeClick = true;
+    window.setTimeout(() => {
+      this.suppressNodeClick = false;
+    }, 0);
   }
 }
 
@@ -621,8 +735,38 @@ function wrapNodeTitle(value: string): string[] {
   return [firstLine, truncate(words.slice(index).join(" "), 18)];
 }
 
+function wrapNodeMeta(values: Array<string | null>, limit = 24): string[] {
+  const parts = values.filter((value): value is string => Boolean(value)).map((value) => fitWord(value, limit));
+
+  if (parts.length === 0) {
+    return ["Дані не вказані"];
+  }
+
+  const combined = parts.join(" • ");
+
+  if (combined.length <= limit) {
+    return [combined];
+  }
+
+  if (parts.length === 2) {
+    return [parts[0], truncate(parts[1], limit)];
+  }
+
+  const firstLine = parts.slice(0, 2).join(" • ");
+
+  if (firstLine.length <= limit) {
+    return [firstLine, truncate(parts[2], limit)];
+  }
+
+  return [parts[0], truncate(parts.slice(1).join(" • "), limit)];
+}
+
 function fitWord(word: string, limit: number): string {
   return word.length > limit ? truncate(word, limit) : word;
+}
+
+function measurePointerDistance(first: { x: number; y: number }, second: { x: number; y: number }): number {
+  return Math.hypot(second.x - first.x, second.y - first.y);
 }
 
 function clamp(value: number, min: number, max: number): number {
