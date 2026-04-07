@@ -104,7 +104,7 @@ async function routeRequest(
   const directoryPersonMatch = pathname.match(/^\/api\/directory\/persons\/([^/]+)$/);
 
   if (directoryPersonMatch && request.method === "GET") {
-    return getDirectoryPerson(env, decodeURIComponent(directoryPersonMatch[1]));
+    return getDirectoryPerson(env, requireAuthenticatedUser(currentUser), decodeURIComponent(directoryPersonMatch[1]));
   }
 
   const directoryPersonImportMatch = pathname.match(/^\/api\/directory\/persons\/([^/]+)\/import$/);

@@ -7,6 +7,7 @@ export type RelationshipDirection = "current_is_parent" | "current_is_child";
 export interface Person {
   id: string;
   sourcePersonId?: string | null;
+  canEdit?: boolean;
   firstName: string;
   lastName: string | null;
   middleName: string | null;

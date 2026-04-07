@@ -1,29 +1,23 @@
 import type { CreatePersonDto, SessionUser, UpdatePersonDto } from "@family-tree/shared";
 
-import { getPersonById, getPersonByIdGlobal, listPersons, mapPersonRow } from "../lib/db";
+import {
+  canEditPerson,
+  countOtherPersonPermissions,
+  findDuplicatePersonByIdentity,
+  getPersonById,
+  getPersonByIdGlobal,
+  grantPersonPermission,
+  listPersons,
+} from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
-import { ensurePersonGraphImported, getCanonicalPersonRowByAnyId } from "../lib/person-graph";
 import { normalizeCreatePersonDto, normalizeUpdatePersonDto, toDbBoolean } from "../lib/normalize";
 import type { Env } from "../types";
 
-type PersonRow = {
+type DuplicatePerson = {
   id: string;
-  user_id: string;
-  source_person_id: string | null;
-  first_name: string;
-  last_name: string | null;
-  middle_name: string | null;
-  maiden_name: string | null;
-  gender: "male" | "female" | "other" | "unknown";
-  birth_date: string | null;
-  death_date: string | null;
-  birth_place: string | null;
-  death_place: string | null;
-  biography: string | null;
-  is_living: number | null;
-  photo_url: string | null;
-  created_at: string;
-  updated_at: string;
+  firstName: string;
+  lastName: string | null;
+  middleName: string | null;
 };
 
 export async function getPersons(env: Env, currentUser: SessionUser): Promise<Response> {
@@ -41,20 +35,12 @@ export async function getPerson(env: Env, currentUser: SessionUser, personId: st
   return json(person);
 }
 
-export async function getDirectoryPerson(env: Env, personId: string): Promise<Response> {
-  const canonicalPerson = await getCanonicalPersonRowByAnyId(env.DB, personId);
-
-  if (!canonicalPerson) {
-    throw new HttpError(404, "Людину не знайдено");
-  }
-
-  const person = mapPersonRow(canonicalPerson);
-
-  if (!person) {
-    throw new HttpError(404, "Людину не знайдено");
-  }
-
-  return json(person);
+export async function getDirectoryPerson(
+  env: Env,
+  currentUser: SessionUser,
+  personId: string,
+): Promise<Response> {
+  return getPerson(env, currentUser, personId);
 }
 
 export async function importDirectoryPerson(
@@ -62,30 +48,42 @@ export async function importDirectoryPerson(
   currentUser: SessionUser,
   sourcePersonId: string,
 ): Promise<Response> {
-  const sourcePerson = await getCanonicalPersonRowByAnyId(env.DB, sourcePersonId);
+  const person = await getPersonById(env.DB, currentUser.id, sourcePersonId);
 
-  if (!sourcePerson) {
+  if (!person) {
     throw new HttpError(404, "Людину не знайдено");
   }
 
-  if (sourcePerson.user_id === currentUser.id) {
-    return json(mapPersonRow(sourcePerson));
-  }
-
-  const importedPerson = await ensurePersonGraphImported(env.DB, sourcePerson.user_id, sourcePerson.id, currentUser.id);
-  return json(importedPerson, { status: 201 });
+  return json(person, { status: 200 });
 }
 
 export async function createPerson(request: Request, env: Env, currentUser: SessionUser): Promise<Response> {
   const input = normalizeCreatePersonDto(await readJson<CreatePersonDto>(request));
+  const duplicate = await findDuplicatePersonByIdentity(env.DB, {
+    firstName: input.firstName,
+    lastName: input.lastName,
+    birthDate: input.birthDate,
+  });
+
+  if (duplicate) {
+    throw new HttpError(
+      409,
+      "Неможливо створити людину: профіль з таким ім’ям, прізвищем і датою народження вже існує.",
+      {
+        code: "person_duplicate",
+        personId: duplicate.id,
+        personName: formatPersonName(duplicate),
+      },
+    );
+  }
+
   const personId = crypto.randomUUID();
   const timestamp = new Date().toISOString();
 
   await env.DB.prepare(
     `
-      INSERT INTO persons (
+      INSERT INTO global_persons (
         id,
-        user_id,
         first_name,
         last_name,
         middle_name,
@@ -100,12 +98,11 @@ export async function createPerson(request: Request, env: Env, currentUser: Sess
         photo_url,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   )
     .bind(
       personId,
-      currentUser.id,
       input.firstName,
       input.lastName,
       input.middleName,
@@ -123,16 +120,15 @@ export async function createPerson(request: Request, env: Env, currentUser: Sess
     )
     .run();
 
-  const row = await env.DB
-    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
-    .bind(currentUser.id, personId)
-    .first<PersonRow>();
+  await grantPersonPermission(env.DB, currentUser.id, personId, "owner");
 
-  if (!row) {
+  const person = await getPersonById(env.DB, currentUser.id, personId);
+
+  if (!person) {
     throw new HttpError(500, "Не вдалося створити людину");
   }
 
-  return json(mapPersonRow(row), { status: 201 });
+  return json(person, { status: 201 });
 }
 
 export async function updatePerson(
@@ -147,7 +143,33 @@ export async function updatePerson(
     throw new HttpError(404, "Людину не знайдено");
   }
 
+  if (!(await canEditPerson(env.DB, currentUser.id, personId))) {
+    throw new HttpError(403, "У вас немає прав на редагування цього профілю");
+  }
+
   const input = normalizeUpdatePersonDto(await readJson<UpdatePersonDto>(request));
+  const duplicate = await findDuplicatePersonByIdentity(
+    env.DB,
+    {
+      firstName: input.firstName ?? existing.firstName,
+      lastName: input.lastName ?? existing.lastName,
+      birthDate: input.birthDate ?? existing.birthDate,
+    },
+    existing.id,
+  );
+
+  if (duplicate) {
+    throw new HttpError(
+      409,
+      "Неможливо зберегти зміни: профіль з таким ім’ям, прізвищем і датою народження вже існує.",
+      {
+        code: "person_duplicate",
+        personId: duplicate.id,
+        personName: formatPersonName(duplicate),
+      },
+    );
+  }
+
   const updates: string[] = [];
   const values: unknown[] = [];
 
@@ -219,38 +241,47 @@ export async function updatePerson(
   values.push(new Date().toISOString());
 
   await env.DB
-    .prepare(`UPDATE persons SET ${updates.join(", ")} WHERE user_id = ? AND id = ?`)
-    .bind(...values, currentUser.id, personId)
+    .prepare(`UPDATE global_persons SET ${updates.join(", ")} WHERE id = ?`)
+    .bind(...values, personId)
     .run();
 
-  const row = await env.DB
-    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
-    .bind(currentUser.id, personId)
-    .first<PersonRow>();
+  const person = await getPersonById(env.DB, currentUser.id, personId);
 
-  if (!row) {
+  if (!person) {
     throw new HttpError(500, "Не вдалося оновити людину");
   }
 
-  return json(mapPersonRow(row));
+  return json(person);
 }
 
 export async function deletePerson(env: Env, currentUser: SessionUser, personId: string): Promise<Response> {
-  const existing = await getPersonById(env.DB, currentUser.id, personId);
+  const existing = await getPersonByIdGlobal(env.DB, personId);
 
   if (!existing) {
     throw new HttpError(404, "Людину не знайдено");
+  }
+
+  if (!(await canEditPerson(env.DB, currentUser.id, personId))) {
+    throw new HttpError(403, "У вас немає прав на видалення цього профілю");
   }
 
   if (currentUser.primaryPersonId === personId) {
     throw new HttpError(400, "Не можна видалити власний профіль");
   }
 
+  if ((await countOtherPersonPermissions(env.DB, personId, currentUser.id)) > 0) {
+    throw new HttpError(409, "Не можна видалити спільний профіль, який уже використовується іншими акаунтами");
+  }
+
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM relationships WHERE user_id = ? AND (person1_id = ? OR person2_id = ?)")
-      .bind(currentUser.id, personId, personId),
-    env.DB.prepare("DELETE FROM persons WHERE user_id = ? AND id = ?").bind(currentUser.id, personId),
+    env.DB.prepare("DELETE FROM global_relationships WHERE person1_id = ? OR person2_id = ?").bind(personId, personId),
+    env.DB.prepare("DELETE FROM person_permissions WHERE person_id = ?").bind(personId),
+    env.DB.prepare("DELETE FROM global_persons WHERE id = ?").bind(personId),
   ]);
 
   return noContent();
+}
+
+function formatPersonName(person: DuplicatePerson): string {
+  return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
 }

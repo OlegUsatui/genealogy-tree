@@ -18,15 +18,7 @@ export async function deleteAccount(
   }
 
   await env.DB.batch([
-    env.DB.prepare(
-      `
-        DELETE FROM relationships
-        WHERE user_id = ?
-          OR person1_id IN (SELECT id FROM persons WHERE user_id = ?)
-          OR person2_id IN (SELECT id FROM persons WHERE user_id = ?)
-      `,
-    ).bind(currentUser.id, currentUser.id, currentUser.id),
-    env.DB.prepare("DELETE FROM persons WHERE user_id = ?").bind(currentUser.id),
+    env.DB.prepare("DELETE FROM person_permissions WHERE user_id = ?").bind(currentUser.id),
     env.DB.prepare("DELETE FROM users WHERE id = ?").bind(currentUser.id),
   ]);
 

@@ -1,9 +1,9 @@
 import type { CreateUserDto, UserAccount } from "@family-tree/shared";
 
+import { findDuplicatePersonByIdentity, getPersonByIdGlobal, grantPersonPermission } from "../lib/db";
 import { HttpError, json, readJson } from "../lib/http";
-import { normalizeCreateUserDto } from "../lib/normalize";
+import { normalizeCreateUserDto, toDbBoolean } from "../lib/normalize";
 import { hashPassword } from "../lib/password";
-import { ensurePersonGraphImported, getCanonicalPersonRowByAnyId } from "../lib/person-graph";
 import type { Env } from "../types";
 
 type UserRow = {
@@ -32,11 +32,13 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
   let primaryPersonId: string | null = null;
 
   if (input.personMode === "existing") {
-    const sourcePerson = await getCanonicalPersonRowByAnyId(env.DB, input.existingPersonId!);
+    const existingPerson = await getPersonByIdGlobal(env.DB, input.existingPersonId!);
 
-    if (!sourcePerson) {
+    if (!existingPerson) {
       throw new HttpError(404, "Обрану людину не знайдено");
     }
+
+    primaryPersonId = existingPerson.id;
 
     await env.DB.prepare(
       `
@@ -50,29 +52,36 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
         ) VALUES (?, ?, ?, ?, ?, ?)
       `,
     )
-      .bind(userId, input.email, passwordHash, null, timestamp, timestamp)
+      .bind(userId, input.email, passwordHash, primaryPersonId, timestamp, timestamp)
       .run();
 
     try {
-      const importedPrimaryPerson = await ensurePersonGraphImported(
-        env.DB,
-        sourcePerson.user_id,
-        sourcePerson.id,
-        userId,
-      );
-
-      primaryPersonId = importedPrimaryPerson.id;
-
-      await env.DB.prepare("UPDATE users SET primary_person_id = ?, updated_at = ? WHERE id = ?")
-        .bind(primaryPersonId, new Date().toISOString(), userId)
-        .run();
+      await grantPersonPermission(env.DB, userId, primaryPersonId, "owner");
     } catch (error) {
       await cleanupUserCreation(env.DB, userId);
       throw error;
     }
   } else {
-    primaryPersonId = crypto.randomUUID();
     const primaryPerson = input.person!;
+    const duplicate = await findDuplicatePersonByIdentity(env.DB, {
+      firstName: primaryPerson.firstName,
+      lastName: primaryPerson.lastName,
+      birthDate: primaryPerson.birthDate,
+    });
+
+    if (duplicate) {
+      throw new HttpError(
+        409,
+        "Неможливо створити профіль: людина з таким ім’ям, прізвищем і датою народження вже існує.",
+        {
+          code: "person_duplicate",
+          personId: duplicate.id,
+          personName: formatPersonName(duplicate),
+        },
+      );
+    }
+
+    primaryPersonId = crypto.randomUUID();
 
     await env.DB.batch([
       env.DB.prepare(
@@ -90,10 +99,8 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
         .bind(userId, input.email, passwordHash, primaryPersonId, timestamp, timestamp),
       env.DB.prepare(
         `
-          INSERT INTO persons (
+          INSERT INTO global_persons (
             id,
-            user_id,
-            source_person_id,
             first_name,
             last_name,
             middle_name,
@@ -108,13 +115,11 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
             photo_url,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
         .bind(
           primaryPersonId,
-          userId,
-          null,
           primaryPerson.firstName,
           primaryPerson.lastName,
           primaryPerson.middleName,
@@ -125,11 +130,17 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
           primaryPerson.birthPlace,
           null,
           null,
-          primaryPerson.isLiving === null ? null : primaryPerson.isLiving ? 1 : 0,
+          toDbBoolean(primaryPerson.isLiving ?? null),
           null,
           timestamp,
           timestamp,
         ),
+      env.DB.prepare(
+        `
+          INSERT INTO person_permissions (user_id, person_id, role, created_at)
+          VALUES (?, ?, 'owner', ?)
+        `,
+      ).bind(userId, primaryPersonId, timestamp),
     ]);
   }
 
@@ -158,8 +169,11 @@ function mapUserRow(row: UserRow): UserAccount {
 
 async function cleanupUserCreation(db: D1Database, userId: string): Promise<void> {
   await db.batch([
-    db.prepare("DELETE FROM relationships WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM persons WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM person_permissions WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM users WHERE id = ?").bind(userId),
   ]);
+}
+
+function formatPersonName(person: { firstName: string; middleName: string | null; lastName: string | null }): string {
+  return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
 }

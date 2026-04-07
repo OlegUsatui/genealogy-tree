@@ -4,8 +4,7 @@ import type { DbNullable } from "../types";
 
 type PersonRow = {
   id: string;
-  user_id: string;
-  source_person_id: DbNullable<string>;
+  source_person_id?: DbNullable<string>;
   first_name: string;
   last_name: DbNullable<string>;
   middle_name: DbNullable<string>;
@@ -24,7 +23,6 @@ type PersonRow = {
 
 type RelationshipRow = {
   id: string;
-  user_id: string;
   type: Relationship["type"];
   person1_id: string;
   person2_id: string;
@@ -32,12 +30,28 @@ type RelationshipRow = {
   end_date: DbNullable<string>;
   notes: DbNullable<string>;
   created_at: string;
+  updated_at?: string;
 };
 
-export function mapPersonRow(row: PersonRow): Person {
+type PermissionRole = "owner" | "editor" | "viewer";
+
+type PermissionRow = {
+  person_id: string;
+};
+
+type PrimaryPersonRow = {
+  primary_person_id: string | null;
+};
+
+type CountRow = {
+  count: number;
+};
+
+export function mapPersonRow(row: PersonRow, canEdit = false): Person {
   return {
     id: row.id,
-    sourcePersonId: row.source_person_id,
+    sourcePersonId: row.source_person_id ?? null,
+    canEdit,
     firstName: row.first_name,
     lastName: row.last_name,
     middleName: row.middle_name,
@@ -73,29 +87,34 @@ export async function getPersonById(
   userId: string,
   personId: string,
 ): Promise<Person | null> {
-  const row = await db
-    .prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?")
-    .bind(userId, personId)
-    .first<PersonRow>();
-  return row ? mapPersonRow(row) : null;
+  const row = await db.prepare("SELECT * FROM global_persons WHERE id = ?").bind(personId).first<PersonRow>();
+
+  if (!row) {
+    return null;
+  }
+
+  return mapPersonRow(row, await canEditPerson(db, userId, personId));
 }
 
 export async function getPersonByIdGlobal(
   db: D1Database,
   personId: string,
 ): Promise<Person | null> {
-  const row = await db.prepare("SELECT * FROM persons WHERE id = ?").bind(personId).first<PersonRow>();
+  const row = await db.prepare("SELECT * FROM global_persons WHERE id = ?").bind(personId).first<PersonRow>();
   return row ? mapPersonRow(row) : null;
 }
 
 export async function listPersons(db: D1Database, userId: string): Promise<Person[]> {
-  const result = await db
-    .prepare(
-      "SELECT * FROM persons WHERE user_id = ? ORDER BY COALESCE(last_name, ''), first_name, created_at",
-    )
-    .bind(userId)
-    .all<PersonRow>();
-  return result.results.map(mapPersonRow);
+  const editablePersonIds = await listEditablePersonIds(db, userId);
+  const rootPersonId = await getPrimaryPersonId(db, userId);
+  const connectedPersonIds = rootPersonId ? await listConnectedPersonIds(db, rootPersonId) : [];
+  const personIds = [...new Set([...editablePersonIds, ...connectedPersonIds])];
+
+  if (personIds.length === 0) {
+    return [];
+  }
+
+  return getPersonsByIds(db, userId, personIds);
 }
 
 export async function getPersonsByIds(
@@ -107,15 +126,17 @@ export async function getPersonsByIds(
     return [];
   }
 
-  const placeholders = createPlaceholders(personIds.length);
+  const uniqueIds = [...new Set(personIds)];
+  const placeholders = createPlaceholders(uniqueIds.length);
   const result = await db
     .prepare(
-      `SELECT * FROM persons WHERE user_id = ? AND id IN (${placeholders}) ORDER BY COALESCE(last_name, ''), first_name`,
+      `SELECT * FROM global_persons WHERE id IN (${placeholders}) ORDER BY COALESCE(last_name, ''), first_name`,
     )
-    .bind(userId, ...personIds)
+    .bind(...uniqueIds)
     .all<PersonRow>();
+  const editableIds = await listEditablePersonIds(db, userId, uniqueIds);
 
-  return result.results.map(mapPersonRow);
+  return result.results.map((row) => mapPersonRow(row, editableIds.includes(row.id)));
 }
 
 export async function listRelationshipsByPersonId(
@@ -123,17 +144,17 @@ export async function listRelationshipsByPersonId(
   userId: string,
   personId: string,
 ): Promise<Relationship[]> {
+  void userId;
   const result = await db
     .prepare(
       `
         SELECT *
-        FROM relationships
-        WHERE user_id = ?
-          AND (person1_id = ? OR person2_id = ?)
+        FROM global_relationships
+        WHERE person1_id = ? OR person2_id = ?
         ORDER BY created_at DESC
       `,
     )
-    .bind(userId, personId, personId)
+    .bind(personId, personId)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -144,21 +165,28 @@ export async function getRelationshipById(
   userId: string,
   relationshipId: string,
 ): Promise<Relationship | null> {
+  void userId;
   const row = await db
-    .prepare("SELECT * FROM relationships WHERE user_id = ? AND id = ?")
-    .bind(userId, relationshipId)
+    .prepare("SELECT * FROM global_relationships WHERE id = ?")
+    .bind(relationshipId)
     .first<RelationshipRow>();
 
   return row ? mapRelationshipRow(row) : null;
 }
 
 export async function personsExist(db: D1Database, userId: string, personIds: string[]): Promise<boolean> {
+  void userId;
   const uniqueIds = [...new Set(personIds)];
+
+  if (uniqueIds.length === 0) {
+    return false;
+  }
+
   const placeholders = createPlaceholders(uniqueIds.length);
   const row = await db
-    .prepare(`SELECT COUNT(*) AS count FROM persons WHERE user_id = ? AND id IN (${placeholders})`)
-    .bind(userId, ...uniqueIds)
-    .first<{ count: number }>();
+    .prepare(`SELECT COUNT(*) AS count FROM global_persons WHERE id IN (${placeholders})`)
+    .bind(...uniqueIds)
+    .first<CountRow>();
 
   return Number(row?.count ?? 0) === uniqueIds.length;
 }
@@ -168,6 +196,7 @@ export async function getParentRelationshipsForChildren(
   userId: string,
   childIds: string[],
 ): Promise<Relationship[]> {
+  void userId;
   if (childIds.length === 0) {
     return [];
   }
@@ -176,13 +205,12 @@ export async function getParentRelationshipsForChildren(
     .prepare(
       `
         SELECT *
-        FROM relationships
-        WHERE user_id = ?
-          AND type = 'parent_child'
+        FROM global_relationships
+        WHERE type = 'parent_child'
           AND person2_id IN (${createPlaceholders(childIds.length)})
       `,
     )
-    .bind(userId, ...childIds)
+    .bind(...childIds)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -193,6 +221,7 @@ export async function getChildRelationshipsForParents(
   userId: string,
   parentIds: string[],
 ): Promise<Relationship[]> {
+  void userId;
   if (parentIds.length === 0) {
     return [];
   }
@@ -201,13 +230,12 @@ export async function getChildRelationshipsForParents(
     .prepare(
       `
         SELECT *
-        FROM relationships
-        WHERE user_id = ?
-          AND type = 'parent_child'
+        FROM global_relationships
+        WHERE type = 'parent_child'
           AND person1_id IN (${createPlaceholders(parentIds.length)})
       `,
     )
-    .bind(userId, ...parentIds)
+    .bind(...parentIds)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
@@ -218,6 +246,7 @@ export async function getSpouseRelationshipsForPersons(
   userId: string,
   personIds: string[],
 ): Promise<Relationship[]> {
+  void userId;
   if (personIds.length === 0) {
     return [];
   }
@@ -227,18 +256,225 @@ export async function getSpouseRelationshipsForPersons(
     .prepare(
       `
         SELECT *
-        FROM relationships
-        WHERE user_id = ?
-          AND type = 'spouse'
+        FROM global_relationships
+        WHERE type = 'spouse'
           AND (person1_id IN (${placeholders}) OR person2_id IN (${placeholders}))
       `,
     )
-    .bind(userId, ...personIds, ...personIds)
+    .bind(...personIds, ...personIds)
     .all<RelationshipRow>();
 
   return result.results.map(mapRelationshipRow);
 }
 
+export async function canEditPerson(db: D1Database, userId: string, personId: string): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `
+        SELECT person_id
+        FROM person_permissions
+        WHERE user_id = ?
+          AND person_id = ?
+          AND role IN ('owner', 'editor')
+        LIMIT 1
+      `,
+    )
+    .bind(userId, personId)
+    .first<PermissionRow>();
+
+  return !!row;
+}
+
+export async function canEditAnyPerson(
+  db: D1Database,
+  userId: string,
+  personIds: string[],
+): Promise<boolean> {
+  const uniqueIds = [...new Set(personIds)];
+
+  if (uniqueIds.length === 0) {
+    return false;
+  }
+
+  const placeholders = createPlaceholders(uniqueIds.length);
+  const row = await db
+    .prepare(
+      `
+        SELECT COUNT(*) AS count
+        FROM person_permissions
+        WHERE user_id = ?
+          AND role IN ('owner', 'editor')
+          AND person_id IN (${placeholders})
+      `,
+    )
+    .bind(userId, ...uniqueIds)
+    .first<CountRow>();
+
+  return Number(row?.count ?? 0) > 0;
+}
+
+export async function grantPersonPermission(
+  db: D1Database,
+  userId: string,
+  personId: string,
+  role: PermissionRole,
+): Promise<void> {
+  await db
+    .prepare(
+      `
+        INSERT INTO person_permissions (user_id, person_id, role, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, person_id) DO UPDATE SET role = CASE
+          WHEN person_permissions.role = 'owner' OR excluded.role = 'owner' THEN 'owner'
+          WHEN person_permissions.role = 'editor' OR excluded.role = 'editor' THEN 'editor'
+          ELSE 'viewer'
+        END
+      `,
+    )
+    .bind(userId, personId, role, new Date().toISOString())
+    .run();
+}
+
+export async function countOtherPersonPermissions(
+  db: D1Database,
+  personId: string,
+  userId: string,
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `
+        SELECT COUNT(*) AS count
+        FROM person_permissions
+        WHERE person_id = ?
+          AND user_id <> ?
+      `,
+    )
+    .bind(personId, userId)
+    .first<CountRow>();
+
+  return Number(row?.count ?? 0);
+}
+
+export async function findDuplicatePersonByIdentity(
+  db: D1Database,
+  input: {
+    firstName: string | null | undefined;
+    lastName: string | null | undefined;
+    birthDate: string | null | undefined;
+  },
+  ignorePersonId?: string,
+): Promise<{
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  middleName: string | null;
+} | null> {
+  const firstName = normalizeIdentityValue(input.firstName);
+  const lastName = normalizeIdentityValue(input.lastName);
+  const birthDate = input.birthDate?.trim() ?? "";
+
+  if (!firstName || !lastName || !birthDate) {
+    return null;
+  }
+
+  const result = await db
+    .prepare(
+      `
+        SELECT
+          id,
+          first_name AS firstName,
+          last_name AS lastName,
+          middle_name AS middleName
+        FROM global_persons
+        WHERE birth_date = ?
+        ORDER BY created_at
+      `,
+    )
+    .bind(birthDate)
+    .all<{
+      id: string;
+      firstName: string;
+      lastName: string | null;
+      middleName: string | null;
+    }>();
+
+  return (
+    result.results.find((candidate) => {
+      if (candidate.id === ignorePersonId) {
+        return false;
+      }
+
+      return (
+        normalizeIdentityValue(candidate.firstName) === firstName &&
+        normalizeIdentityValue(candidate.lastName) === lastName
+      );
+    }) ?? null
+  );
+}
+
 function createPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+async function getPrimaryPersonId(db: D1Database, userId: string): Promise<string | null> {
+  const row = await db
+    .prepare("SELECT primary_person_id FROM users WHERE id = ?")
+    .bind(userId)
+    .first<PrimaryPersonRow>();
+
+  return row?.primary_person_id ?? null;
+}
+
+async function listEditablePersonIds(
+  db: D1Database,
+  userId: string,
+  personIds?: string[],
+): Promise<string[]> {
+  if (personIds && personIds.length === 0) {
+    return [];
+  }
+
+  const scopedClause = personIds ? ` AND person_id IN (${createPlaceholders(personIds.length)})` : "";
+  const result = await db
+    .prepare(
+      `
+        SELECT person_id
+        FROM person_permissions
+        WHERE user_id = ?
+          AND role IN ('owner', 'editor')${scopedClause}
+      `,
+    )
+    .bind(userId, ...(personIds ?? []))
+    .all<PermissionRow>();
+
+  return result.results.map((row) => row.person_id);
+}
+
+async function listConnectedPersonIds(db: D1Database, rootPersonId: string): Promise<string[]> {
+  const result = await db
+    .prepare(
+      `
+        WITH RECURSIVE connected(id) AS (
+          SELECT ?
+          UNION
+          SELECT CASE
+            WHEN global_relationships.person1_id = connected.id THEN global_relationships.person2_id
+            ELSE global_relationships.person1_id
+          END
+          FROM global_relationships
+          JOIN connected
+            ON global_relationships.person1_id = connected.id
+            OR global_relationships.person2_id = connected.id
+        )
+        SELECT id FROM connected
+      `,
+    )
+    .bind(rootPersonId)
+    .all<{ id: string }>();
+
+  return result.results.map((row) => row.id);
+}
+
+function normalizeIdentityValue(value: string | null | undefined): string {
+  return value?.trim().toLocaleLowerCase("uk") ?? "";
 }

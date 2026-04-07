@@ -20,7 +20,7 @@ export async function searchPersons(url: URL, env: Env, currentUser: SessionUser
 }
 
 type RegistrationCandidateRow = {
-  source_person_id: string;
+  id: string;
   first_name: string;
   last_name: string | null;
   middle_name: string | null;
@@ -53,7 +53,7 @@ async function queryGlobalPersonCandidates(
   const result = await env.DB.prepare(
     `
       SELECT
-        COALESCE(source_person_id, id) AS source_person_id,
+        id,
         first_name,
         last_name,
         middle_name,
@@ -62,7 +62,7 @@ async function queryGlobalPersonCandidates(
         birth_date,
         birth_place,
         is_living
-      FROM persons
+      FROM global_persons
       ORDER BY COALESCE(last_name, ''), first_name, birth_date, id
     `,
   )
@@ -94,7 +94,7 @@ async function queryGlobalPersonCandidates(
 
 function mapRegistrationCandidateRow(row: RegistrationCandidateRow): RegistrationPersonCandidate {
   return {
-    sourcePersonId: row.source_person_id,
+    sourcePersonId: row.id,
     firstName: row.first_name,
     lastName: row.last_name,
     middleName: row.middle_name,

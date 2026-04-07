@@ -1,5 +1,4 @@
 import type {
-  CreateDirectoryRelationshipResponse,
   CreateRelationshipDto,
   Person,
   Relationship,
@@ -52,7 +51,7 @@ import { RelationshipsService } from "../services/relationships.service";
 
             <ng-template #readOnlyProfileNotice>
               <div class="profile-notice">
-                <p class="muted">Щоб прив’язати цю людину до свого дерева, додай зв’язок у блоці нижче.</p>
+                <p class="muted">Профіль уже є в спільному дереві. Щоб пов’язати його зі своєю гілкою, створи зв’язок нижче.</p>
               </div>
             </ng-template>
           </div>
@@ -66,7 +65,7 @@ import { RelationshipsService } from "../services/relationships.service";
           </div>
         </mat-card>
 
-        <mat-card class="relationships-card" *ngIf="isOwnProfile()">
+        <mat-card class="relationships-card">
           <div class="section-heading">
             <div>
               <h2>Родинні зв’язки</h2>
@@ -93,7 +92,7 @@ import { RelationshipsService } from "../services/relationships.service";
                     class="relationship-row"
                     *ngFor="let item of parents()"
                     [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
-                    [attr.draggable]="!isSubmittingRelationship()"
+                    [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
                     (dragstart)="onRelationshipDragStart($event, item)"
                     (dragend)="onRelationshipDragEnd()"
                   >
@@ -105,7 +104,7 @@ import { RelationshipsService } from "../services/relationships.service";
                         <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
                       </div>
                     </div>
-                    <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                    <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
                   </mat-card>
                 </ng-container>
               </div>
@@ -130,7 +129,7 @@ import { RelationshipsService } from "../services/relationships.service";
                     class="relationship-row"
                     *ngFor="let item of spouses()"
                     [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
-                    [attr.draggable]="!isSubmittingRelationship()"
+                    [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
                     (dragstart)="onRelationshipDragStart($event, item)"
                     (dragend)="onRelationshipDragEnd()"
                   >
@@ -142,7 +141,7 @@ import { RelationshipsService } from "../services/relationships.service";
                         <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
                       </div>
                     </div>
-                    <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                    <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
                   </mat-card>
                 </ng-container>
               </div>
@@ -167,7 +166,7 @@ import { RelationshipsService } from "../services/relationships.service";
                     class="relationship-row"
                     *ngFor="let item of children()"
                     [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
-                    [attr.draggable]="!isSubmittingRelationship()"
+                    [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
                     (dragstart)="onRelationshipDragStart($event, item)"
                     (dragend)="onRelationshipDragEnd()"
                   >
@@ -179,7 +178,7 @@ import { RelationshipsService } from "../services/relationships.service";
                         <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
                       </div>
                     </div>
-                    <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                    <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
                   </mat-card>
                 </ng-container>
               </div>
@@ -660,7 +659,7 @@ export class PersonDetailsPageComponent {
       return this.allPersons().filter((candidate) => candidate.id !== currentId);
     }
 
-    return this.allPersons().filter((candidate) => candidate.sourcePersonId !== currentId);
+    return this.allPersons().filter((candidate) => candidate.id !== currentId && candidate.canEdit === true);
   }
 
   filteredRelationshipCandidates(): Person[] {
@@ -733,11 +732,7 @@ export class PersonDetailsPageComponent {
       }
     })();
 
-    if (this.isOwnProfile()) {
-      return baseText;
-    }
-
-    return `${baseText} Якщо потрібно, цей профіль буде автоматично доданий у ваше дерево.`;
+    return baseText;
   }
 
   relationshipPreviewText(): string | null {
@@ -852,26 +847,11 @@ export class PersonDetailsPageComponent {
 
     try {
       const value = this.relationshipForm.getRawValue();
-      if (this.isOwnProfile()) {
-        const payload = buildRelationshipPayload(currentPerson.id, value);
-        await awaitOne<Relationship>(this.relationshipsService.create(payload));
-        this.resetRelationshipForm();
-        await this.loadPage(currentPerson.id);
-      } else {
-        const response = await awaitOne<CreateDirectoryRelationshipResponse>(
-          this.relationshipsService.createWithDirectoryPerson(currentPerson.id, {
-            type: value.type,
-            localPersonId: value.relatedPersonId,
-            direction: value.direction,
-            startDate: emptyToNull(value.startDate),
-            endDate: emptyToNull(value.endDate),
-            notes: emptyToNull(value.notes),
-          }),
-        );
-        this.resetRelationshipForm();
-        this.snackBar.open("Зв’язок додано до обох дерев", "Закрити", { duration: 3000 });
-        await this.router.navigate(["/persons", response.person.id]);
-      }
+      const payload = buildRelationshipPayload(currentPerson.id, value);
+      await awaitOne<Relationship>(this.relationshipsService.create(payload));
+      this.resetRelationshipForm();
+      this.snackBar.open("Зв’язок збережено", "Закрити", { duration: 3000 });
+      await this.loadPage(currentPerson.id);
     } catch (error) {
       this.errorMessage.set(readApiError(error));
     } finally {
@@ -1030,18 +1010,13 @@ export class PersonDetailsPageComponent {
 
     try {
       const persons = await awaitOne<Person[]>(this.personsService.list());
-      const isOwnProfile = persons.some((person) => person.id === personId);
-      const person = isOwnProfile
-        ? await awaitOne<Person>(this.personsService.get(personId))
-        : await awaitOne<Person>(this.personsService.getDirectoryPerson(personId));
-      const relationships = isOwnProfile
-        ? await awaitOne<Relationship[]>(this.relationshipsService.list(personId))
-        : [];
+      const person = await awaitOne<Person>(this.personsService.get(personId));
+      const relationships = await awaitOne<Relationship[]>(this.relationshipsService.list(personId));
 
       this.person.set(person);
       this.allPersons.set(persons);
       this.relationships.set(relationships);
-      this.isOwnProfile.set(isOwnProfile);
+      this.isOwnProfile.set(person.canEdit === true);
     } catch (error) {
       this.allPersons.set([]);
       this.person.set(null);

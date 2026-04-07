@@ -6,20 +6,21 @@ import type {
   SessionUser,
 } from "@family-tree/shared";
 
-import { getPersonById, getRelationshipById, listRelationshipsByPersonId, personsExist } from "../lib/db";
-import { HttpError, json, noContent, readJson } from "../lib/http";
 import {
-  ensurePersonGraphImported,
-  getCanonicalPersonRowByAnyId,
-  replaceRelationshipAcrossAccounts,
-  syncRelationshipAcrossAccounts,
-} from "../lib/person-graph";
+  canEditAnyPerson,
+  canEditPerson,
+  getPersonById,
+  getPersonByIdGlobal,
+  getRelationshipById,
+  listRelationshipsByPersonId,
+  personsExist,
+} from "../lib/db";
+import { HttpError, json, noContent, readJson } from "../lib/http";
 import { normalizeCreateRelationshipDto } from "../lib/normalize";
 import type { Env } from "../types";
 
 type RelationshipRow = {
   id: string;
-  user_id: string;
   type: "parent_child" | "spouse";
   person1_id: string;
   person2_id: string;
@@ -36,7 +37,7 @@ export async function getRelationships(url: URL, env: Env, currentUser: SessionU
     throw new HttpError(400, "Параметр personId є обов’язковим");
   }
 
-  const person = await getPersonById(env.DB, currentUser.id, personId);
+  const person = await getPersonByIdGlobal(env.DB, personId);
 
   if (!person) {
     throw new HttpError(404, "Людину не знайдено");
@@ -57,21 +58,17 @@ export async function createRelationship(
     throw new HttpError(404, "Одну або кілька людей не знайдено");
   }
 
-  const duplicate = await findDuplicateRelationship(env, currentUser, input);
+  if (!(await canEditAnyPerson(env.DB, currentUser.id, [input.person1Id, input.person2Id]))) {
+    throw new HttpError(403, "У вас немає прав на створення цього зв’язку");
+  }
+
+  const duplicate = await findDuplicateRelationship(env, input);
 
   if (duplicate) {
     throw new HttpError(409, "Такий зв’язок уже існує");
   }
-  const relationship = await syncRelationshipAcrossAccounts(env.DB, {
-    userId: currentUser.id,
-    type: input.type,
-    person1Id: input.person1Id,
-    person2Id: input.person2Id,
-    startDate: input.startDate ?? null,
-    endDate: input.endDate ?? null,
-    notes: input.notes ?? null,
-  });
 
+  const relationship = await insertRelationship(env, input);
   return json(relationship, { status: 201 });
 }
 
@@ -88,26 +85,30 @@ export async function createDirectoryRelationship(
     throw new HttpError(404, "Людину з вашого дерева не знайдено");
   }
 
-  const sourcePerson = await getCanonicalPersonRowByAnyId(env.DB, directoryPersonId);
+  if (!(await canEditPerson(env.DB, currentUser.id, input.localPersonId))) {
+    throw new HttpError(403, "У вас немає прав на редагування обраної людини");
+  }
 
-  if (!sourcePerson) {
+  const directoryPerson = await getPersonById(env.DB, currentUser.id, directoryPersonId);
+
+  if (!directoryPerson) {
     throw new HttpError(404, "Людину не знайдено");
   }
 
-  const currentAccountPerson = await ensurePersonGraphImported(env.DB, sourcePerson.user_id, sourcePerson.id, currentUser.id);
-
-  if (currentAccountPerson.id === input.localPersonId) {
+  if (directoryPerson.id === input.localPersonId) {
     throw new HttpError(400, "Не можна створити зв’язок людини самої з собою");
   }
 
-  const localPayload = buildRelationshipPayload(currentAccountPerson.id, input);
-  const relationship = await syncRelationshipAcrossAccounts(env.DB, {
-    userId: currentUser.id,
-    ...localPayload,
-  });
+  const payload = buildRelationshipPayload(directoryPerson.id, input);
+  const duplicate = await findDuplicateRelationship(env, payload);
 
+  if (duplicate) {
+    throw new HttpError(409, "Такий зв’язок уже існує");
+  }
+
+  const relationship = await insertRelationship(env, payload);
   const response: CreateDirectoryRelationshipResponse = {
-    person: currentAccountPerson,
+    person: directoryPerson,
     relationship,
   };
 
@@ -125,7 +126,11 @@ export async function deleteRelationship(
     throw new HttpError(404, "Зв’язок не знайдено");
   }
 
-  await env.DB.prepare("DELETE FROM relationships WHERE user_id = ? AND id = ?").bind(currentUser.id, relationshipId).run();
+  if (!(await canEditAnyPerson(env.DB, currentUser.id, [existing.person1Id, existing.person2Id]))) {
+    throw new HttpError(403, "У вас немає прав на видалення цього зв’язку");
+  }
+
+  await env.DB.prepare("DELETE FROM global_relationships WHERE id = ?").bind(relationshipId).run();
   return noContent();
 }
 
@@ -141,64 +146,130 @@ export async function updateRelationship(
     throw new HttpError(404, "Зв’язок не знайдено");
   }
 
+  if (!(await canEditAnyPerson(env.DB, currentUser.id, [existing.person1Id, existing.person2Id]))) {
+    throw new HttpError(403, "У вас немає прав на оновлення цього зв’язку");
+  }
+
   const input = normalizeCreateRelationshipDto(await readJson<CreateRelationshipDto>(request));
 
   if (!(await personsExist(env.DB, currentUser.id, [input.person1Id, input.person2Id]))) {
     throw new HttpError(404, "Одну або кілька людей не знайдено");
   }
 
-  const relationship = await replaceRelationshipAcrossAccounts(env.DB, {
-    userId: currentUser.id,
-    relationshipId,
-    type: input.type,
-    person1Id: input.person1Id,
-    person2Id: input.person2Id,
-    startDate: input.startDate ?? null,
-    endDate: input.endDate ?? null,
-    notes: input.notes ?? null,
-  });
+  if (!(await canEditAnyPerson(env.DB, currentUser.id, [input.person1Id, input.person2Id]))) {
+    throw new HttpError(403, "У вас немає прав на оновлення цього зв’язку");
+  }
 
-  return json(relationship);
+  const duplicate = await findDuplicateRelationship(env, input, relationshipId);
+
+  if (duplicate) {
+    throw new HttpError(409, "Такий зв’язок уже існує");
+  }
+
+  await env.DB
+    .prepare(
+      `
+        UPDATE global_relationships
+        SET
+          type = ?,
+          person1_id = ?,
+          person2_id = ?,
+          start_date = ?,
+          end_date = ?,
+          notes = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+    )
+    .bind(
+      input.type,
+      normalizeRelationshipPerson1Id(input),
+      normalizeRelationshipPerson2Id(input),
+      input.startDate ?? null,
+      input.endDate ?? null,
+      input.notes ?? null,
+      new Date().toISOString(),
+      relationshipId,
+    )
+    .run();
+
+  const updated = await getRelationshipById(env.DB, currentUser.id, relationshipId);
+
+  if (!updated) {
+    throw new HttpError(500, "Не вдалося оновити зв’язок");
+  }
+
+  return json(updated);
+}
+
+async function insertRelationship(env: Env, input: CreateRelationshipDto) {
+  const relationshipId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+
+  await env.DB
+    .prepare(
+      `
+        INSERT INTO global_relationships (
+          id,
+          type,
+          person1_id,
+          person2_id,
+          start_date,
+          end_date,
+          notes,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    )
+    .bind(
+      relationshipId,
+      input.type,
+      normalizeRelationshipPerson1Id(input),
+      normalizeRelationshipPerson2Id(input),
+      input.startDate ?? null,
+      input.endDate ?? null,
+      input.notes ?? null,
+      timestamp,
+      timestamp,
+    )
+    .run();
+
+  const relationship = await getRelationshipById(env.DB, "", relationshipId);
+
+  if (!relationship) {
+    throw new HttpError(500, "Не вдалося створити зв’язок");
+  }
+
+  return relationship;
 }
 
 async function findDuplicateRelationship(
   env: Env,
-  currentUser: SessionUser,
   input: CreateRelationshipDto,
+  ignoreRelationshipId?: string,
 ): Promise<RelationshipRow | null> {
-  if (input.type === "spouse") {
-    return env.DB
-      .prepare(
-        `
-          SELECT *
-          FROM relationships
-          WHERE user_id = ?
-            AND type = 'spouse'
-            AND (
-              (person1_id = ? AND person2_id = ?)
-              OR (person1_id = ? AND person2_id = ?)
-            )
-          LIMIT 1
-        `,
-      )
-      .bind(currentUser.id, input.person1Id, input.person2Id, input.person2Id, input.person1Id)
-      .first<RelationshipRow>();
-  }
-
-  return env.DB
+  const person1Id = normalizeRelationshipPerson1Id(input);
+  const person2Id = normalizeRelationshipPerson2Id(input);
+  const row = await env.DB
     .prepare(
       `
         SELECT *
-        FROM relationships
-        WHERE user_id = ?
-          AND type = 'parent_child'
+        FROM global_relationships
+        WHERE type = ?
           AND person1_id = ?
           AND person2_id = ?
         LIMIT 1
       `,
     )
-    .bind(currentUser.id, input.person1Id, input.person2Id)
+    .bind(input.type, person1Id, person2Id)
     .first<RelationshipRow>();
+
+  if (!row || row.id === ignoreRelationshipId) {
+    return null;
+  }
+
+  return row;
 }
 
 function normalizeCreateDirectoryRelationshipDto(input: CreateDirectoryRelationshipDto): CreateDirectoryRelationshipDto & {
@@ -252,6 +323,22 @@ function buildRelationshipPayload(
     endDate: input.endDate ?? null,
     notes: input.notes ?? null,
   };
+}
+
+function normalizeRelationshipPerson1Id(input: CreateRelationshipDto): string {
+  if (input.type !== "spouse") {
+    return input.person1Id;
+  }
+
+  return input.person1Id.localeCompare(input.person2Id) <= 0 ? input.person1Id : input.person2Id;
+}
+
+function normalizeRelationshipPerson2Id(input: CreateRelationshipDto): string {
+  if (input.type !== "spouse") {
+    return input.person2Id;
+  }
+
+  return input.person1Id.localeCompare(input.person2Id) <= 0 ? input.person2Id : input.person1Id;
 }
 
 function normalizeRequiredString(value: unknown, errorMessage: string): string {

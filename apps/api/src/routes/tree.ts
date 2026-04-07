@@ -3,7 +3,7 @@ import type { SessionUser, TreeResponse } from "@family-tree/shared";
 import {
   getChildRelationshipsForParents,
   getParentRelationshipsForChildren,
-  getPersonById,
+  getPersonByIdGlobal,
   getPersonsByIds,
   getSpouseRelationshipsForPersons,
 } from "../lib/db";
@@ -16,7 +16,7 @@ export async function getTree(
   currentUser: SessionUser,
   personId: string,
 ): Promise<Response> {
-  const rootPerson = await getPersonById(env.DB, currentUser.id, personId);
+  const rootPerson = await getPersonByIdGlobal(env.DB, personId);
 
   if (!rootPerson) {
     throw new HttpError(404, "Людину не знайдено");
