@@ -112,6 +112,15 @@ export interface PersonSearchCandidate {
   isLiving: boolean | null;
 }
 
+export interface DuplicatePersonMatch {
+  personId: string;
+  personName: string | null;
+}
+
+export interface DuplicatePersonCheckResponse {
+  duplicate: DuplicatePersonMatch | null;
+}
+
 export interface CreateUserDto {
   email: string;
   password: string;

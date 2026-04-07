@@ -1,4 +1,4 @@
-import type { CreatePersonDto, Person } from "@family-tree/shared";
+import type { CreatePersonDto, CreateRelationshipDto, DuplicatePersonCheckResponse, Person, Relationship } from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
@@ -6,6 +6,7 @@ import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { MatSnackBar } from "@angular/material/snack-bar";
 
 import { PhotoCropDialogComponent } from "../components/photo-crop-dialog.component";
 import { buildPhotoInitials, isSupportedPhotoUrl, optimizePhotoFile, validatePhotoFile } from "../lib/photo";
@@ -13,8 +14,10 @@ import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
+import { RelationshipsService } from "../services/relationships.service";
 
 type LivingOption = "unknown" | "true" | "false";
+type NewRelativeGroup = "parents" | "children" | "spouses";
 
 @Component({
   standalone: true,
@@ -24,126 +27,182 @@ type LivingOption = "unknown" | "true" | "false";
       <mat-card class="form-shell">
         <div class="form-header">
           <div>
-            <h1>{{ personId() ? "Редагувати людину" : "Нова людина" }}</h1>
-            <p class="muted">Заповніть дані профілю та за потреби додайте фотографію.</p>
+            <h1>{{ formTitle() }}</h1>
+            <p class="muted">{{ formIntro() }}</p>
           </div>
 
-          <a mat-stroked-button color="primary" routerLink="/persons" class="form-link">До списку</a>
+          <button mat-stroked-button color="primary" type="button" class="form-link" (click)="navigateBackFromForm()">
+            {{ backButtonLabel() }}
+          </button>
         </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="form-grid">
-          <div class="field-stack">
-            <mat-form-field appearance="outline">
-              <mat-label>Ім’я</mat-label>
-              <input matInput id="firstName" formControlName="firstName">
-            </mat-form-field>
+          <mat-card appearance="outlined" class="section-card relation-context-card" *ngIf="relationContextPerson() as relationPerson">
+            <div class="section-copy">
+              <h2>{{ relationContextHeading(relationPerson) }}</h2>
+              <p class="muted">{{ relationContextDescription(relationPerson) }}</p>
+            </div>
+          </mat-card>
 
-            <mat-form-field appearance="outline">
-              <mat-label>Прізвище</mat-label>
-              <input matInput id="lastName" formControlName="lastName">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>По батькові / друге ім’я</mat-label>
-              <input matInput id="middleName" formControlName="middleName">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Дівоче прізвище</mat-label>
-              <input matInput id="maidenName" formControlName="maidenName">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Стать</mat-label>
-              <mat-select id="gender" formControlName="gender">
-                <mat-option value="unknown">не вказано</mat-option>
-                <mat-option value="male">чоловіча</mat-option>
-                <mat-option value="female">жіноча</mat-option>
-                <mat-option value="other">інша</mat-option>
-              </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Статус життя</mat-label>
-              <mat-select id="isLiving" formControlName="isLiving">
-                <mat-option value="unknown">не вказано</mat-option>
-                <mat-option value="true">живий / жива</mat-option>
-                <mat-option value="false">помер / померла</mat-option>
-              </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Дата народження</mat-label>
-              <input matInput id="birthDate" type="date" formControlName="birthDate">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Місце народження</mat-label>
-              <input matInput id="birthPlace" formControlName="birthPlace">
-            </mat-form-field>
-
-            <ng-container *ngIf="isMarkedDeceased()">
-              <mat-form-field appearance="outline">
-                <mat-label>Дата смерті</mat-label>
-                <input matInput id="deathDate" type="date" formControlName="deathDate">
-              </mat-form-field>
-
-              <mat-form-field appearance="outline">
-                <mat-label>Місце смерті</mat-label>
-                <input matInput id="deathPlace" formControlName="deathPlace">
-              </mat-form-field>
-            </ng-container>
-          </div>
-
-          <section class="photo-section">
-            <div class="photo-preview-shell">
-              <img *ngIf="photoPreviewUrl(); else photoFallback" [src]="photoPreviewUrl()!" alt="Фото профілю" class="photo-preview">
-              <ng-template #photoFallback>
-                <div class="photo-fallback">{{ photoInitials() }}</div>
-              </ng-template>
+          <mat-card appearance="outlined" class="section-card">
+            <div class="section-copy">
+              <h2>Основне</h2>
+              <p class="muted">
+                Спочатку внесіть ключові дані, за якими людину можна впізнати. Якщо такий профіль уже є, покажемо це
+                ще до збереження.
+              </p>
             </div>
 
-            <div class="photo-copy">
-              <div>
-                <h2>Фотографія</h2>
-                <p class="muted">Оберіть фото людини. Перед збереженням ми автоматично стиснемо файл.</p>
+            <div class="field-stack">
+              <mat-form-field appearance="outline">
+                <mat-label>Ім’я</mat-label>
+                <input matInput id="firstName" formControlName="firstName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Прізвище</mat-label>
+                <input matInput id="lastName" formControlName="lastName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>По батькові / друге ім’я</mat-label>
+                <input matInput id="middleName" formControlName="middleName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Дата народження</mat-label>
+                <input matInput id="birthDate" type="date" formControlName="birthDate">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Місце народження</mat-label>
+                <input matInput id="birthPlace" formControlName="birthPlace">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Стать</mat-label>
+                <mat-select id="gender" formControlName="gender">
+                  <mat-option value="unknown">не вказано</mat-option>
+                  <mat-option value="male">чоловіча</mat-option>
+                  <mat-option value="female">жіноча</mat-option>
+                  <mat-option value="other">інша</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Статус життя</mat-label>
+                <mat-select id="isLiving" formControlName="isLiving">
+                  <mat-option value="unknown">не вказано</mat-option>
+                  <mat-option value="true">живий / жива</mat-option>
+                  <mat-option value="false">помер / померла</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <ng-container *ngIf="isMarkedDeceased()">
+                <mat-form-field appearance="outline">
+                  <mat-label>Дата смерті</mat-label>
+                  <input matInput id="deathDate" type="date" formControlName="deathDate">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Місце смерті</mat-label>
+                  <input matInput id="deathPlace" formControlName="deathPlace">
+                </mat-form-field>
+              </ng-container>
+            </div>
+
+            <mat-progress-bar *ngIf="isCheckingDuplicate()" mode="indeterminate"></mat-progress-bar>
+
+            <div class="duplicate-preview-notice" *ngIf="liveDuplicateLink() as liveDuplicateLink">
+              <p class="duplicate-preview-title">Схоже, така людина вже є в базі.</p>
+              <p class="muted">
+                Профіль з таким ім’ям, прізвищем і датою народження вже існує. Краще відкрити його, а не створювати
+                дубль.
+              </p>
+              <a mat-stroked-button color="primary" [routerLink]="['/persons', liveDuplicateLink.personId]">
+                Відкрити профіль {{ liveDuplicateLink.personName || "людини" }}
+              </a>
+            </div>
+          </mat-card>
+
+          <section class="optional-section">
+            <button type="button" class="optional-toggle" (click)="toggleAdditionalDetails()">
+              <div class="section-copy">
+                <h2>Додатково</h2>
+                <p class="muted">Фото, біографія та другорядні поля. Це можна заповнити й пізніше.</p>
               </div>
 
-            <div class="photo-actions">
-              <label class="photo-upload-button">
-                <input type="file" accept="image/*" class="photo-input" (change)="onPhotoSelected($event)">
-                <span>{{ isProcessingPhoto() ? "Обробка..." : "Завантажити фото" }}</span>
-                </label>
-                <button
-                  *ngIf="form.controls.photoUrl.value"
-                  mat-button
-                  type="button"
-                  [disabled]="isProcessingPhoto()"
-                  (click)="removePhoto()"
-                >
-                  Прибрати фото
-                </button>
-              </div>
+              <span class="optional-toggle-copy">
+                {{ isAdditionalDetailsOpen() ? "Сховати" : "Показати" }}
+              </span>
+            </button>
 
-              <p class="error-text" *ngIf="photoErrorMessage()">{{ photoErrorMessage() }}</p>
+            <div class="optional-body" *ngIf="isAdditionalDetailsOpen()">
+              <mat-form-field appearance="outline">
+                <mat-label>Дівоче прізвище</mat-label>
+                <input matInput id="maidenName" formControlName="maidenName">
+              </mat-form-field>
+
+              <section class="photo-section">
+                <div class="photo-preview-shell">
+                  <img *ngIf="photoPreviewUrl(); else photoFallback" [src]="photoPreviewUrl()!" alt="Фото профілю" class="photo-preview">
+                  <ng-template #photoFallback>
+                    <div class="photo-fallback">{{ photoInitials() }}</div>
+                  </ng-template>
+                </div>
+
+                <div class="photo-copy">
+                  <div>
+                    <h2>Фотографія</h2>
+                    <p class="muted">Оберіть фото людини. Перед збереженням ми автоматично стиснемо файл.</p>
+                  </div>
+
+                  <div class="photo-actions">
+                    <label class="photo-upload-button">
+                      <input type="file" accept="image/*" class="photo-input" (change)="onPhotoSelected($event)">
+                      <span>{{ isProcessingPhoto() ? "Обробка..." : "Завантажити фото" }}</span>
+                    </label>
+                    <button
+                      *ngIf="form.controls.photoUrl.value"
+                      mat-button
+                      type="button"
+                      [disabled]="isProcessingPhoto()"
+                      (click)="removePhoto()"
+                    >
+                      Прибрати фото
+                    </button>
+                  </div>
+
+                  <p class="error-text" *ngIf="photoErrorMessage()">{{ photoErrorMessage() }}</p>
+                </div>
+              </section>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Біографія</mat-label>
+                <textarea matInput id="biography" formControlName="biography"></textarea>
+              </mat-form-field>
             </div>
           </section>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Біографія</mat-label>
-            <textarea matInput id="biography" formControlName="biography"></textarea>
-          </mat-form-field>
+          <div class="duplicate-person-notice" *ngIf="duplicatePersonLink() as duplicatePersonLink; else simpleErrorMessage">
+            <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+            <a mat-stroked-button color="primary" [routerLink]="['/persons', duplicatePersonLink.personId]">
+              Перейти до профілю {{ duplicatePersonLink.personName || "людини" }}
+            </a>
+          </div>
 
-          <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+          <ng-template #simpleErrorMessage>
+            <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+          </ng-template>
 
           <div class="form-actions">
             <button
               mat-flat-button
               color="primary"
               type="submit"
-              [disabled]="form.invalid || isSaving() || isDeletingAccount()"
+              [disabled]="form.invalid || isSaving() || isDeletingAccount() || hasBlockingDuplicate()"
             >
-              {{ isSaving() ? "Збереження..." : "Зберегти" }}
+              {{ submitButtonLabel() }}
             </button>
           </div>
         </form>
@@ -203,10 +262,68 @@ type LivingOption = "unknown" | "true" | "false";
         gap: 18px;
       }
 
+      .section-card {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 18px;
+        border-radius: 24px;
+        border: 1px solid rgba(127, 160, 200, 0.16);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+      }
+
+      .section-copy h2,
+      .section-copy p {
+        margin: 0;
+      }
+
+      .section-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
       .field-stack {
         display: flex;
         flex-direction: column;
         gap: 14px;
+      }
+
+      .optional-section {
+        border-radius: 24px;
+        border: 1px solid rgba(127, 160, 200, 0.16);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+      }
+
+      .optional-toggle {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+        color: inherit;
+      }
+
+      .optional-toggle-copy {
+        flex-shrink: 0;
+        font-weight: 700;
+        color: #234261;
+      }
+
+      .optional-body {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 0 18px 18px;
       }
 
       .photo-section {
@@ -220,6 +337,23 @@ type LivingOption = "unknown" | "true" | "false";
         background:
           linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
           linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+      }
+
+      .duplicate-preview-notice {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(197, 157, 74, 0.2);
+        background: rgba(255, 252, 245, 0.96);
+      }
+
+      .duplicate-preview-title {
+        margin: 0;
+        font-weight: 800;
+        color: #5f4a17;
       }
 
       .photo-preview-shell {
@@ -311,6 +445,17 @@ type LivingOption = "unknown" | "true" | "false";
         background: rgba(255, 246, 246, 0.72);
       }
 
+      .duplicate-person-notice {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(196, 114, 114, 0.16);
+        background: rgba(255, 249, 249, 0.94);
+      }
+
       .danger-copy h2 {
         margin: 0 0 6px;
         font-size: 20px;
@@ -345,6 +490,11 @@ type LivingOption = "unknown" | "true" | "false";
           grid-template-columns: 1fr;
         }
 
+        .optional-toggle {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
         .photo-preview-shell {
           width: 120px;
           height: 120px;
@@ -371,7 +521,9 @@ export class PersonFormPageComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly personsService = inject(PersonsService);
+  private readonly relationshipsService = inject(RelationshipsService);
   private readonly authService = inject(AuthService);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly personId = signal<string | null>(null);
   readonly isSaving = signal(false);
@@ -382,6 +534,13 @@ export class PersonFormPageComponent {
   readonly photoErrorMessage = signal("");
   readonly isProcessingPhoto = signal(false);
   readonly cropSourceFile = signal<File | null>(null);
+  readonly duplicatePersonLink = signal<DuplicatePersonLink | null>(null);
+  readonly liveDuplicateLink = signal<DuplicatePersonLink | null>(null);
+  readonly isCheckingDuplicate = signal(false);
+  readonly isAdditionalDetailsOpen = signal(false);
+  readonly relationContextPerson = signal<Person | null>(null);
+  readonly relationContextGroup = signal<NewRelativeGroup | null>(null);
+  readonly returnTreePersonId = signal<string | null>(null);
 
   readonly form = new FormGroup({
     firstName: new FormControl("", {
@@ -401,12 +560,33 @@ export class PersonFormPageComponent {
     photoUrl: new FormControl("", { nonNullable: true }),
   });
 
+  private duplicateCheckRequestId = 0;
+  private duplicateCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      if (this.duplicateCheckTimer) {
+        clearTimeout(this.duplicateCheckTimer);
+      }
+    });
+
     this.form.controls.isLiving.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((value) => {
       if (value === "true") {
         this.form.controls.deathDate.setValue("", { emitEvent: false });
         this.form.controls.deathPlace.setValue("", { emitEvent: false });
       }
+    });
+
+    this.form.controls.firstName.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.scheduleDuplicateCheck();
+    });
+
+    this.form.controls.lastName.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.scheduleDuplicateCheck();
+    });
+
+    this.form.controls.birthDate.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.scheduleDuplicateCheck();
     });
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
@@ -415,6 +595,9 @@ export class PersonFormPageComponent {
 
       if (id) {
         void this.loadPerson(id);
+        this.relationContextPerson.set(null);
+        this.relationContextGroup.set(null);
+        this.returnTreePersonId.set(null);
       } else {
         this.form.reset({
           firstName: "",
@@ -432,7 +615,31 @@ export class PersonFormPageComponent {
         });
         this.photoPreviewUrl.set(null);
         this.photoErrorMessage.set("");
+        this.duplicatePersonLink.set(null);
+        this.liveDuplicateLink.set(null);
+        this.isCheckingDuplicate.set(false);
+        this.isAdditionalDetailsOpen.set(false);
       }
+    });
+
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      if (this.personId()) {
+        return;
+      }
+
+      const relatedTo = params.get("relatedTo");
+      const group = parseNewRelativeGroup(params.get("group"));
+      const returnTreePersonId = params.get("returnTreePersonId");
+
+      this.relationContextGroup.set(group);
+      this.returnTreePersonId.set(returnTreePersonId);
+
+      if (relatedTo && group) {
+        void this.loadRelationContextPerson(relatedTo);
+        return;
+      }
+
+      this.relationContextPerson.set(null);
     });
   }
 
@@ -442,8 +649,14 @@ export class PersonFormPageComponent {
       return;
     }
 
+    if (this.hasBlockingDuplicate()) {
+      this.errorMessage.set("Профіль з такими даними вже існує. Відкрийте його замість створення дубля.");
+      return;
+    }
+
     this.isSaving.set(true);
     this.errorMessage.set("");
+    this.duplicatePersonLink.set(null);
     const payload = toPersonPayload(this.form.getRawValue());
 
     try {
@@ -452,10 +665,17 @@ export class PersonFormPageComponent {
         await this.router.navigate(["/persons", person.id]);
       } else {
         const person = await awaitOne<Person>(this.personsService.create(payload));
-        await this.router.navigate(["/persons", person.id]);
+        if (this.relationContextPerson() && this.relationContextGroup()) {
+          await this.createContextRelationship(person);
+          this.snackBar.open("Людину додано і зв’язок створено", "Закрити", { duration: 3000 });
+          await this.navigateAfterContextCreate();
+        } else {
+          await this.router.navigate(["/persons", person.id]);
+        }
       }
     } catch (error) {
       this.errorMessage.set(readApiError(error));
+      this.duplicatePersonLink.set(readDuplicatePersonLink(error));
     } finally {
       this.isSaving.set(false);
     }
@@ -469,8 +689,113 @@ export class PersonFormPageComponent {
     return this.personId() !== null && this.personId() === this.authService.user()?.primaryPersonId;
   }
 
+  formTitle(): string {
+    if (this.personId()) {
+      return "Редагувати людину";
+    }
+
+    const group = this.relationContextGroup();
+
+    switch (group) {
+      case "parents":
+        return "Додати батька / матір";
+      case "children":
+        return "Додати дитину";
+      case "spouses":
+        return "Додати партнера / партнерку";
+      default:
+        return "Нова людина";
+    }
+  }
+
+  formIntro(): string {
+    if (this.personId()) {
+      return "Оновіть дані профілю та за потреби додайте фотографію.";
+    }
+
+    if (this.relationContextPerson() && this.relationContextGroup()) {
+      return "Створіть новий профіль, а зв’язок із вибраною людиною ми створимо автоматично після збереження.";
+    }
+
+    return "Заповніть дані профілю та за потреби додайте фотографію.";
+  }
+
+  backButtonLabel(): string {
+    if (this.returnTreePersonId()) {
+      return "Назад до дерева";
+    }
+
+    if (this.relationContextPerson()) {
+      return "Назад до профілю";
+    }
+
+    return "До списку";
+  }
+
+  relationContextHeading(person: Person): string {
+    switch (this.relationContextGroup()) {
+      case "parents":
+        return `Ви додаєте батька або матір для ${this.displayName(person)}`;
+      case "children":
+        return `Ви додаєте дитину для ${this.displayName(person)}`;
+      case "spouses":
+        return `Ви додаєте партнера або партнерку для ${this.displayName(person)}`;
+      default:
+        return "";
+    }
+  }
+
+  relationContextDescription(person: Person): string {
+    switch (this.relationContextGroup()) {
+      case "parents":
+        return `Після збереження нова людина автоматично стане одним із батьків для ${this.displayName(person)}.`;
+      case "children":
+        return `Після збереження нова людина автоматично стане дитиною для ${this.displayName(person)}.`;
+      case "spouses":
+        return `Після збереження нова людина автоматично буде пов’язана з ${this.displayName(person)} як партнер або партнерка.`;
+      default:
+        return "";
+    }
+  }
+
   photoInitials(): string {
     return buildPhotoInitials(this.form.controls.firstName.value, this.form.controls.lastName.value);
+  }
+
+  displayName(person: Person): string {
+    return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+  }
+
+  async navigateBackFromForm(): Promise<void> {
+    if (this.returnTreePersonId()) {
+      await this.router.navigate(["/tree", this.returnTreePersonId()]);
+      return;
+    }
+
+    const relationPerson = this.relationContextPerson();
+
+    if (relationPerson) {
+      await this.router.navigate(["/persons", relationPerson.id]);
+      return;
+    }
+
+    await this.router.navigate(["/persons"]);
+  }
+
+  toggleAdditionalDetails(): void {
+    this.isAdditionalDetailsOpen.update((value) => !value);
+  }
+
+  hasBlockingDuplicate(): boolean {
+    return this.liveDuplicateLink() !== null;
+  }
+
+  submitButtonLabel(): string {
+    if (this.isSaving()) {
+      return this.personId() ? "Збереження..." : "Створення...";
+    }
+
+    return this.personId() ? "Зберегти зміни" : "Створити людину";
   }
 
   async onPhotoSelected(event: Event): Promise<void> {
@@ -491,6 +816,7 @@ export class PersonFormPageComponent {
 
     try {
       validatePhotoFile(file);
+      this.isAdditionalDetailsOpen.set(true);
       this.cropSourceFile.set(file);
     } catch (error) {
       this.photoErrorMessage.set(readUploadError(error));
@@ -569,9 +895,113 @@ export class PersonFormPageComponent {
       });
       this.photoPreviewUrl.set(isSupportedPhotoUrl(person.photoUrl) ? person.photoUrl : null);
       this.photoErrorMessage.set("");
+      this.duplicatePersonLink.set(null);
+      this.liveDuplicateLink.set(null);
+      this.isCheckingDuplicate.set(false);
+      this.isAdditionalDetailsOpen.set(hasAdditionalDetails(person));
     } catch (error) {
       this.errorMessage.set(readApiError(error));
     }
+  }
+
+  private async loadRelationContextPerson(personId: string): Promise<void> {
+    try {
+      const person = await awaitOne<Person>(this.personsService.get(personId));
+      this.relationContextPerson.set(person);
+    } catch {
+      this.relationContextPerson.set(null);
+    }
+  }
+
+  private async createContextRelationship(createdPerson: Person): Promise<void> {
+    const relationPerson = this.relationContextPerson();
+    const group = this.relationContextGroup();
+
+    if (!relationPerson || !group) {
+      return;
+    }
+
+    await awaitOne<Relationship>(
+      this.relationshipsService.create(buildRelationshipPayloadForNewRelative(relationPerson.id, createdPerson.id, group)),
+    );
+  }
+
+  private async navigateAfterContextCreate(): Promise<void> {
+    if (this.returnTreePersonId()) {
+      await this.router.navigate(["/tree", this.returnTreePersonId()]);
+      return;
+    }
+
+    const relationPerson = this.relationContextPerson();
+
+    if (relationPerson) {
+      await this.router.navigate(["/persons", relationPerson.id]);
+      return;
+    }
+  }
+
+  private async checkDuplicateCandidate(): Promise<void> {
+    const firstName = this.form.controls.firstName.value.trim();
+    const lastName = this.form.controls.lastName.value.trim();
+    const birthDate = this.form.controls.birthDate.value.trim();
+
+    if (!firstName || !lastName || !birthDate) {
+      this.liveDuplicateLink.set(null);
+      this.isCheckingDuplicate.set(false);
+      return;
+    }
+
+    const requestId = ++this.duplicateCheckRequestId;
+    this.isCheckingDuplicate.set(true);
+
+    try {
+      const response = await awaitOne<DuplicatePersonCheckResponse>(
+        this.personsService.checkDuplicate({
+          firstName,
+          lastName,
+          birthDate,
+          ignorePersonId: this.personId() ?? undefined,
+        }),
+      );
+
+      if (this.duplicateCheckRequestId === requestId) {
+        this.liveDuplicateLink.set(response.duplicate);
+      }
+    } catch {
+      if (this.duplicateCheckRequestId === requestId) {
+        this.liveDuplicateLink.set(null);
+      }
+    } finally {
+      if (this.duplicateCheckRequestId === requestId) {
+        this.isCheckingDuplicate.set(false);
+      }
+    }
+  }
+
+  private scheduleDuplicateCheck(): void {
+    if (this.duplicateCheckTimer) {
+      clearTimeout(this.duplicateCheckTimer);
+    }
+
+    this.duplicateCheckTimer = setTimeout(() => {
+      void this.checkDuplicateCandidate();
+    }, 300);
+  }
+}
+
+interface DuplicatePersonLink {
+  personId: string;
+  personName: string | null;
+}
+
+function parseNewRelativeGroup(value: string | null): NewRelativeGroup | null {
+  switch (value) {
+    case "parents":
+    case "children":
+    case "spouses":
+      return value;
+    default:
+      return null;
   }
 }
 
@@ -618,6 +1048,63 @@ function readApiError(error: unknown): string {
   return "Помилка запиту";
 }
 
+function readDuplicatePersonLink(error: unknown): DuplicatePersonLink | null {
+  if (!(error instanceof HttpErrorResponse)) {
+    return null;
+  }
+
+  const details = error.error?.details;
+
+  if (details?.code !== "person_duplicate" || typeof details.personId !== "string") {
+    return null;
+  }
+
+  return {
+    personId: details.personId,
+    personName: typeof details.personName === "string" ? details.personName : null,
+  };
+}
+
 function readUploadError(error: unknown): string {
   return error instanceof Error ? error.message : "Не вдалося обробити фото";
+}
+
+function hasAdditionalDetails(person: Person): boolean {
+  return Boolean(person.maidenName || person.biography || person.photoUrl);
+}
+
+function buildRelationshipPayloadForNewRelative(
+  relatedToPersonId: string,
+  createdPersonId: string,
+  group: NewRelativeGroup,
+): CreateRelationshipDto {
+  switch (group) {
+    case "parents":
+      return {
+        type: "parent_child",
+        person1Id: createdPersonId,
+        person2Id: relatedToPersonId,
+        startDate: null,
+        endDate: null,
+        notes: null,
+      };
+    case "children":
+      return {
+        type: "parent_child",
+        person1Id: relatedToPersonId,
+        person2Id: createdPersonId,
+        startDate: null,
+        endDate: null,
+        notes: null,
+      };
+    case "spouses":
+      return {
+        type: "spouse",
+        person1Id: relatedToPersonId,
+        person2Id: createdPersonId,
+        startDate: null,
+        endDate: null,
+        notes: null,
+      };
+  }
 }

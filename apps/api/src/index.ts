@@ -2,6 +2,7 @@ import type { SessionUser } from "@family-tree/shared";
 
 import { deleteAccount } from "./routes/account";
 import {
+  checkDuplicatePerson,
   createPerson,
   deletePerson,
   getDirectoryPerson,
@@ -99,6 +100,10 @@ async function routeRequest(
 
   if (request.method === "GET" && pathname === "/api/persons") {
     return getPersons(env, requireAuthenticatedUser(currentUser));
+  }
+
+  if (request.method === "GET" && pathname === "/api/persons/duplicate-check") {
+    return checkDuplicatePerson(url, env);
   }
 
   const directoryPersonMatch = pathname.match(/^\/api\/directory\/persons\/([^/]+)$/);

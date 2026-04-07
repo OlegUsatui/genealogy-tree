@@ -65,6 +65,24 @@ import { RelationshipsService } from "../services/relationships.service";
           </div>
         </mat-card>
 
+        <mat-card class="quick-add-card">
+          <div class="section-heading">
+            <div>
+              <h2>Швидко додати нового родича</h2>
+              <p class="muted">
+                Якщо цієї людини ще немає в базі, починай звідси: ми одразу створимо профіль і правильно прив’яжемо
+                його до {{ displayName(person) }}.
+              </p>
+            </div>
+          </div>
+
+          <div class="quick-add-actions">
+            <button mat-stroked-button type="button" (click)="goToCreateRelative('parents')">Додати батька / матір</button>
+            <button mat-stroked-button type="button" (click)="goToCreateRelative('children')">Додати дитину</button>
+            <button mat-stroked-button type="button" (click)="goToCreateRelative('spouses')">Додати партнера / партнерку</button>
+          </div>
+        </mat-card>
+
         <mat-card class="relationships-card">
           <div class="section-heading">
             <div>
@@ -190,7 +208,7 @@ import { RelationshipsService } from "../services/relationships.service";
         <mat-card class="relationship-form-card">
           <div class="section-heading">
             <div>
-              <h2>Додати зв’язок для {{ displayName(person) }}</h2>
+              <h2>Зв’язати з наявною людиною для {{ displayName(person) }}</h2>
               <p class="muted">
                 {{ relationshipFormDescription() }}
               </p>
@@ -286,6 +304,7 @@ import { RelationshipsService } from "../services/relationships.service";
       }
 
       .profile-card,
+      .quick-add-card,
       .relationships-card,
       .relationship-form-card {
         padding: clamp(20px, 2.8vw, 28px);
@@ -403,6 +422,12 @@ import { RelationshipsService } from "../services/relationships.service";
 
       .section-heading {
         margin-bottom: 16px;
+      }
+
+      .quick-add-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
       }
 
       .relationship-groups {
@@ -582,7 +607,12 @@ import { RelationshipsService } from "../services/relationships.service";
           grid-template-columns: 1fr;
         }
 
+        .quick-add-actions {
+          grid-template-columns: 1fr;
+        }
+
         .profile-actions > .mat-mdc-button-base,
+        .quick-add-actions > .mat-mdc-button-base,
         .relationship-mode-picker > .mat-mdc-button-base,
         .form-actions > .mat-mdc-button-base {
           width: 100%;
@@ -765,6 +795,21 @@ export class PersonDetailsPageComponent {
       case "spouses":
         return "Додати партнера / партнерку";
     }
+  }
+
+  async goToCreateRelative(group: RelationshipGroup): Promise<void> {
+    const currentPerson = this.person();
+
+    if (!currentPerson) {
+      return;
+    }
+
+    await this.router.navigate(["/persons/new"], {
+      queryParams: {
+        relatedTo: currentPerson.id,
+        group,
+      },
+    });
   }
 
   parents(): RelationshipView[] {

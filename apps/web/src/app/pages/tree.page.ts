@@ -39,6 +39,16 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
             Дерево
           </button>
+          <div class="node-action-divider"></div>
+          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'parents')">
+            Додати батька / матір
+          </button>
+          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'children')">
+            Додати дитину
+          </button>
+          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'spouses')">
+            Додати партнера / партнерку
+          </button>
         </div>
 
         <div
@@ -189,7 +199,7 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         display: flex;
         flex-direction: column;
         gap: 8px;
-        width: 168px;
+        width: 232px;
         padding: 12px;
         border-radius: 18px;
         border: 1px solid rgba(127, 160, 200, 0.18);
@@ -197,6 +207,12 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98)),
           linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
         box-shadow: 0 18px 40px rgba(31, 53, 79, 0.18);
+      }
+
+      .node-action-divider {
+        height: 1px;
+        margin: 2px 0;
+        background: rgba(127, 160, 200, 0.18);
       }
 
       .tree-error {
@@ -540,6 +556,17 @@ export class TreePageComponent {
     }
 
     await this.router.navigate(["/tree", personId]);
+  }
+
+  async openCreateRelative(personId: string, group: "parents" | "children" | "spouses"): Promise<void> {
+    this.closeNodeActionMenu();
+    await this.router.navigate(["/persons/new"], {
+      queryParams: {
+        relatedTo: personId,
+        group,
+        returnTreePersonId: this.rootPersonId(),
+      },
+    });
   }
 
   handleWheel(event: WheelEvent): void {

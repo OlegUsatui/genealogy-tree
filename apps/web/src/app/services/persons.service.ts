@@ -1,4 +1,4 @@
-import type { CreatePersonDto, Person, UpdatePersonDto } from "@family-tree/shared";
+import type { CreatePersonDto, DuplicatePersonCheckResponse, Person, UpdatePersonDto } from "@family-tree/shared";
 
 import { Injectable, inject } from "@angular/core";
 
@@ -16,6 +16,15 @@ export class PersonsService {
 
   get(personId: string) {
     return this.api.get<Person>(`/persons/${personId}`);
+  }
+
+  checkDuplicate(params: {
+    firstName: string;
+    lastName: string;
+    birthDate: string;
+    ignorePersonId?: string;
+  }) {
+    return this.api.get<DuplicatePersonCheckResponse>("/persons/duplicate-check", params);
   }
 
   getDirectoryPerson(personId: string) {

@@ -1,4 +1,4 @@
-import type { CreatePersonDto, SessionUser, UpdatePersonDto } from "@family-tree/shared";
+import type { CreatePersonDto, DuplicatePersonCheckResponse, SessionUser, UpdatePersonDto } from "@family-tree/shared";
 
 import {
   canEditPerson,
@@ -23,6 +23,38 @@ type DuplicatePerson = {
 export async function getPersons(env: Env, currentUser: SessionUser): Promise<Response> {
   const persons = await listPersons(env.DB, currentUser.id);
   return json(persons);
+}
+
+export async function checkDuplicatePerson(url: URL, env: Env): Promise<Response> {
+  const firstName = url.searchParams.get("firstName")?.trim() ?? "";
+  const lastName = url.searchParams.get("lastName")?.trim() ?? "";
+  const birthDate = url.searchParams.get("birthDate")?.trim() ?? "";
+  const ignorePersonId = url.searchParams.get("ignorePersonId")?.trim() || undefined;
+
+  if (!firstName || !lastName || !birthDate) {
+    return json({ duplicate: null } satisfies DuplicatePersonCheckResponse);
+  }
+
+  const duplicate = await findDuplicatePersonByIdentity(
+    env.DB,
+    {
+      firstName,
+      lastName,
+      birthDate,
+    },
+    ignorePersonId,
+  );
+
+  const response: DuplicatePersonCheckResponse = {
+    duplicate: duplicate
+      ? {
+          personId: duplicate.id,
+          personName: formatPersonName(duplicate),
+        }
+      : null,
+  };
+
+  return json(response);
 }
 
 export async function getPerson(env: Env, currentUser: SessionUser, personId: string): Promise<Response> {
