@@ -191,54 +191,76 @@ import { RelationshipsService } from "../services/relationships.service";
         <mat-card class="relationship-form-card">
           <div class="section-heading">
             <div>
-              <h2>Додати зв’язок</h2>
+              <h2>Додати зв’язок для {{ displayName(person) }}</h2>
               <p class="muted">
-                {{
-                  isOwnProfile()
-                    ? "Вкажіть тип і другу людину. Для зв’язку батьки-діти виберіть напрямок."
-                    : "Виберіть людину зі свого дерева. Якщо потрібно, цей профіль буде автоматично доданий у ваше дерево під час створення зв’язку."
-                }}
+                {{ relationshipFormDescription() }}
               </p>
             </div>
           </div>
 
           <form [formGroup]="relationshipForm" (ngSubmit)="createRelationship()" class="form-grid">
+            <div class="relationship-mode-picker">
+              <button
+                mat-stroked-button
+                type="button"
+                class="relationship-mode-button"
+                [class.relationship-mode-button--active]="selectedRelationshipGroup() === 'parents'"
+                (click)="selectRelationshipGroup('parents')"
+              >
+                Додати батька / матір
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                class="relationship-mode-button"
+                [class.relationship-mode-button--active]="selectedRelationshipGroup() === 'children'"
+                (click)="selectRelationshipGroup('children')"
+              >
+                Додати дитину
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                class="relationship-mode-button"
+                [class.relationship-mode-button--active]="selectedRelationshipGroup() === 'spouses'"
+                (click)="selectRelationshipGroup('spouses')"
+              >
+                Додати партнера / партнерку
+              </button>
+            </div>
+
             <div class="field-grid">
               <mat-form-field appearance="outline">
-                <mat-label>Тип зв’язку</mat-label>
-                <mat-select id="type" formControlName="type">
-                  <mat-option value="parent_child">батьки-діти</mat-option>
-                  <mat-option value="spouse">партнери</mat-option>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'parent_child'">
-                <mat-label>Напрямок</mat-label>
-                <mat-select id="direction" formControlName="direction">
-                  <mat-option value="current_is_parent">Поточна людина є батьком / матір’ю</mat-option>
-                  <mat-option value="current_is_child">Поточна людина є дитиною</mat-option>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline">
-                <mat-label>{{ isOwnProfile() ? "Інша людина" : "Людина з вашого дерева" }}</mat-label>
-                <mat-select id="relatedPersonId" formControlName="relatedPersonId">
-                  <mat-option value="">Оберіть людину</mat-option>
-                  <mat-option *ngFor="let candidate of relationshipCandidates()" [value]="candidate.id">
+                <mat-label>{{ relationshipCandidateLabel() }}</mat-label>
+                <input
+                  matInput
+                  id="relatedPersonQuery"
+                  type="text"
+                  formControlName="relatedPersonQuery"
+                  [matAutocomplete]="relationshipAutocomplete"
+                  (input)="onRelationshipQueryInput($event)"
+                  placeholder="Почніть вводити ім’я або прізвище"
+                >
+                <mat-autocomplete #relationshipAutocomplete="matAutocomplete" (optionSelected)="selectRelationshipCandidate($event.option.value)">
+                  <mat-option *ngFor="let candidate of filteredRelationshipCandidates()" [value]="candidate.id">
                     {{ displayName(candidate) }}
                   </mat-option>
-                </mat-select>
+                </mat-autocomplete>
               </mat-form-field>
 
-              <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'spouse'">
+              <mat-form-field appearance="outline" *ngIf="selectedRelationshipGroup() === 'spouses'">
                 <mat-label>Дата початку стосунків</mat-label>
                 <input matInput id="startDate" type="date" formControlName="startDate">
               </mat-form-field>
 
-              <mat-form-field appearance="outline" *ngIf="relationshipForm.controls.type.value === 'spouse'">
+              <mat-form-field appearance="outline" *ngIf="selectedRelationshipGroup() === 'spouses'">
                 <mat-label>Дата завершення стосунків</mat-label>
                 <input matInput id="endDate" type="date" formControlName="endDate">
               </mat-form-field>
+            </div>
+
+            <div class="relationship-preview" *ngIf="relationshipPreviewText() as preview">
+              {{ preview }}
             </div>
 
             <mat-form-field appearance="outline">
@@ -248,7 +270,7 @@ import { RelationshipsService } from "../services/relationships.service";
 
             <div class="form-actions">
               <button mat-flat-button color="primary" type="submit" [disabled]="relationshipForm.invalid || isSubmittingRelationship()">
-                {{ isSubmittingRelationship() ? "Додавання..." : "Додати зв’язок" }}
+                {{ isSubmittingRelationship() ? "Збереження..." : submitRelationshipLabel() }}
               </button>
             </div>
           </form>
@@ -478,6 +500,37 @@ import { RelationshipsService } from "../services/relationships.service";
         gap: 18px;
       }
 
+      .relationship-mode-picker {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .relationship-mode-button {
+        min-height: 52px;
+        justify-content: center;
+        text-align: center;
+        border-color: rgba(127, 160, 200, 0.18) !important;
+        background: rgba(255, 255, 255, 0.82);
+      }
+
+      .relationship-mode-button--active {
+        background: rgba(226, 237, 252, 0.92) !important;
+        border-color: rgba(67, 118, 182, 0.34) !important;
+        color: #1d4c85 !important;
+      }
+
+      .relationship-preview {
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(127, 160, 200, 0.14);
+        background:
+          linear-gradient(180deg, rgba(247, 251, 255, 0.98), rgba(241, 247, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
+        color: #234261;
+        font-weight: 600;
+      }
+
       .form-actions {
         display: flex;
         justify-content: flex-start;
@@ -526,7 +579,12 @@ import { RelationshipsService } from "../services/relationships.service";
           width: 100%;
         }
 
+        .relationship-mode-picker {
+          grid-template-columns: 1fr;
+        }
+
         .profile-actions > .mat-mdc-button-base,
+        .relationship-mode-picker > .mat-mdc-button-base,
         .form-actions > .mat-mdc-button-base {
           width: 100%;
           justify-content: center;
@@ -562,7 +620,7 @@ export class PersonDetailsPageComponent {
       nonNullable: true,
       validators: [Validators.required],
     }),
-    direction: new FormControl<RelationshipDirection>("current_is_parent", {
+    direction: new FormControl<RelationshipDirection>("current_is_child", {
       nonNullable: true,
       validators: [Validators.required],
     }),
@@ -570,6 +628,7 @@ export class PersonDetailsPageComponent {
       nonNullable: true,
       validators: [Validators.required],
     }),
+    relatedPersonQuery: new FormControl("", { nonNullable: true }),
     startDate: new FormControl("", { nonNullable: true }),
     endDate: new FormControl("", { nonNullable: true }),
     notes: new FormControl("", { nonNullable: true }),
@@ -602,6 +661,115 @@ export class PersonDetailsPageComponent {
     }
 
     return this.allPersons().filter((candidate) => candidate.sourcePersonId !== currentId);
+  }
+
+  filteredRelationshipCandidates(): Person[] {
+    const query = this.relationshipForm.controls.relatedPersonQuery.value.trim().toLocaleLowerCase("uk");
+    const candidates = this.relationshipCandidates();
+
+    if (!query) {
+      return candidates;
+    }
+
+    return candidates.filter((candidate) => {
+      const haystack = [
+        candidate.firstName,
+        candidate.middleName,
+        candidate.lastName,
+        candidate.maidenName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("uk");
+
+      return haystack.includes(query);
+    });
+  }
+
+  selectedRelationshipGroup(): RelationshipGroup {
+    const { type, direction } = this.relationshipForm.getRawValue();
+
+    if (type === "spouse") {
+      return "spouses";
+    }
+
+    return direction === "current_is_parent" ? "children" : "parents";
+  }
+
+  selectRelationshipGroup(group: RelationshipGroup): void {
+    if (group === "spouses") {
+      this.relationshipForm.patchValue({
+        type: "spouse",
+      });
+      return;
+    }
+
+    this.relationshipForm.patchValue({
+      type: "parent_child",
+      direction: group === "children" ? "current_is_parent" : "current_is_child",
+    });
+  }
+
+  relationshipCandidateLabel(): string {
+    switch (this.selectedRelationshipGroup()) {
+      case "parents":
+        return "Оберіть батька або матір";
+      case "children":
+        return "Оберіть дитину";
+      case "spouses":
+        return this.isOwnProfile() ? "Оберіть партнера або партнерку" : "Оберіть людину зі свого дерева";
+    }
+  }
+
+  relationshipFormDescription(): string {
+    const baseText = (() => {
+      switch (this.selectedRelationshipGroup()) {
+        case "parents":
+          return "Оберіть людину, яку потрібно додати до батьків поточного профілю.";
+        case "children":
+          return "Оберіть людину, яку потрібно додати до дітей поточного профілю.";
+        case "spouses":
+          return "Оберіть людину, яку потрібно пов’язати як партнера або партнерку.";
+      }
+    })();
+
+    if (this.isOwnProfile()) {
+      return baseText;
+    }
+
+    return `${baseText} Якщо потрібно, цей профіль буде автоматично доданий у ваше дерево.`;
+  }
+
+  relationshipPreviewText(): string | null {
+    const currentPerson = this.person();
+    const relatedPerson = this.selectedRelationshipCandidate();
+
+    if (!currentPerson || !relatedPerson) {
+      return null;
+    }
+
+    const currentName = this.displayName(currentPerson);
+    const relatedName = this.displayName(relatedPerson);
+
+    switch (this.selectedRelationshipGroup()) {
+      case "parents":
+        return `${relatedName} буде додано до батьків ${currentName}.`;
+      case "children":
+        return `${relatedName} буде додано до дітей ${currentName}.`;
+      case "spouses":
+        return `${currentName} і ${relatedName} будуть пов’язані як партнери.`;
+    }
+  }
+
+  submitRelationshipLabel(): string {
+    switch (this.selectedRelationshipGroup()) {
+      case "parents":
+        return "Додати до батьків";
+      case "children":
+        return "Додати до дітей";
+      case "spouses":
+        return "Додати партнера / партнерку";
+    }
   }
 
   parents(): RelationshipView[] {
@@ -805,6 +973,34 @@ export class PersonDetailsPageComponent {
     }
   }
 
+  onRelationshipQueryInput(event: Event): void {
+    const input = event.target instanceof HTMLInputElement ? event.target.value : "";
+    const selectedCandidate = this.selectedRelationshipCandidate();
+
+    if (!selectedCandidate) {
+      this.relationshipForm.controls.relatedPersonId.setValue("");
+      return;
+    }
+
+    if (input !== this.displayName(selectedCandidate)) {
+      this.relationshipForm.controls.relatedPersonId.setValue("");
+    }
+  }
+
+  selectRelationshipCandidate(personId: string): void {
+    const candidate = this.relationshipCandidates().find((person) => person.id === personId);
+
+    if (!candidate) {
+      this.relationshipForm.controls.relatedPersonId.setValue("");
+      return;
+    }
+
+    this.relationshipForm.patchValue({
+      relatedPersonId: candidate.id,
+      relatedPersonQuery: this.displayName(candidate),
+    });
+  }
+
   async deletePerson(): Promise<void> {
     const currentPerson = this.person();
 
@@ -858,8 +1054,9 @@ export class PersonDetailsPageComponent {
   private resetRelationshipForm(): void {
     this.relationshipForm.reset({
       type: "parent_child",
-      direction: "current_is_parent",
+      direction: "current_is_child",
       relatedPersonId: "",
+      relatedPersonQuery: "",
       startDate: "",
       endDate: "",
       notes: "",
@@ -888,6 +1085,16 @@ export class PersonDetailsPageComponent {
     return [...this.parents(), ...this.spouses(), ...this.children()].find(
       (item) => item.relationship.id === relationshipId,
     ) ?? null;
+  }
+
+  private selectedRelationshipCandidate(): Person | null {
+    const relatedPersonId = this.relationshipForm.controls.relatedPersonId.value;
+
+    if (!relatedPersonId) {
+      return null;
+    }
+
+    return this.relationshipCandidates().find((candidate) => candidate.id === relatedPersonId) ?? null;
   }
 }
 
