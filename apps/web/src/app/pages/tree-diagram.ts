@@ -3,9 +3,9 @@ import type { Person, Relationship, TreeResponse } from "@family-tree/shared";
 import { hierarchy, tree as d3Tree } from "d3-hierarchy";
 import { linkHorizontal, linkVertical } from "d3-shape";
 
-const nodeWidth = 206;
-const nodeHeight = 108;
-const levelGap = 188;
+const nodeWidth = 214;
+const nodeHeight = 162;
+const levelGap = 224;
 const siblingGap = 108;
 const spouseGap = 62;
 const spouseStackGap = 22;

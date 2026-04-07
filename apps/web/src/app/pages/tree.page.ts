@@ -6,6 +6,7 @@ import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from "@a
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router } from "@angular/router";
 
+import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
@@ -77,14 +78,46 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
                   ry="24"
                 ></rect>
 
-                <text class="tree-node-badge" x="18" y="24">{{ nodeRoleLabel(node) }}</text>
-                <text class="tree-node-title" x="18" y="46">
-                  <tspan *ngFor="let line of titleLines(node.person); let index = index" x="18" [attr.dy]="index === 0 ? 0 : 20">
+                <text class="tree-node-badge" [attr.x]="node.width / 2" y="22" text-anchor="middle">
+                  {{ nodeRoleLabel(node) }}
+                </text>
+                <circle class="tree-node-photo-frame" [attr.cx]="node.width / 2" cy="58" r="32"></circle>
+                <defs>
+                  <clipPath [attr.id]="nodePhotoClipId(node.person.id)">
+                    <circle [attr.cx]="node.width / 2" cy="58" r="28"></circle>
+                  </clipPath>
+                </defs>
+                <ng-container *ngIf="renderablePhotoUrl(node.person) as photoUrl; else nodePhotoFallback">
+                  <image
+                    [attr.href]="photoUrl"
+                    [attr.x]="node.width / 2 - 28"
+                    y="30"
+                    width="56"
+                    height="56"
+                    preserveAspectRatio="xMidYMid slice"
+                    [attr.clip-path]="'url(#' + nodePhotoClipId(node.person.id) + ')'"
+                  ></image>
+                </ng-container>
+                <ng-template #nodePhotoFallback>
+                  <text class="tree-node-photo-fallback" [attr.x]="node.width / 2" y="64" text-anchor="middle">
+                    {{ photoInitials(node.person) }}
+                  </text>
+                </ng-template>
+                <text class="tree-node-title" [attr.x]="node.width / 2" y="106" text-anchor="middle">
+                  <tspan
+                    *ngFor="let line of titleLines(node.person); let index = index"
+                    [attr.x]="node.width / 2"
+                    [attr.dy]="index === 0 ? 0 : 18"
+                  >
                     {{ line }}
                   </tspan>
                 </text>
-                <text class="tree-node-meta" x="18" y="84">
-                  <tspan *ngFor="let line of metaLines(node.person); let index = index" x="18" [attr.dy]="index === 0 ? 0 : 15">
+                <text class="tree-node-meta" [attr.x]="node.width / 2" y="138" text-anchor="middle">
+                  <tspan
+                    *ngFor="let line of metaLines(node.person); let index = index"
+                    [attr.x]="node.width / 2"
+                    [attr.dy]="index === 0 ? 0 : 14"
+                  >
                     {{ line }}
                   </tspan>
                 </text>
@@ -251,7 +284,7 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
       }
 
       .tree-node-badge {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.12em;
         text-transform: uppercase;
@@ -259,14 +292,26 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
       }
 
       .tree-node-title {
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 800;
         fill: #17324d;
       }
 
       .tree-node-meta {
-        font-size: 13px;
+        font-size: 12px;
         fill: rgba(86, 120, 162, 0.88);
+      }
+
+      .tree-node-photo-frame {
+        fill: rgba(255, 255, 255, 0.98);
+        stroke: rgba(66, 108, 161, 0.14);
+        stroke-width: 1.2;
+      }
+
+      .tree-node-photo-fallback {
+        font-size: 18px;
+        font-weight: 800;
+        fill: #234261;
       }
 
       @media (max-width: 720px) {
@@ -361,7 +406,7 @@ export class TreePageComponent {
   }
 
   titleLines(person: Person): string[] {
-    return wrapNodeTitle(this.displayName(person));
+    return wrapNodeTitle(this.displayName(person), 16);
   }
 
   sceneTransform(): string {
@@ -373,7 +418,19 @@ export class TreePageComponent {
       person.birthDate,
       person.birthPlace,
       person.deathDate ? `† ${person.deathDate}` : null,
-    ]);
+    ], 22);
+  }
+
+  renderablePhotoUrl(person: Person): string | null {
+    return isSupportedPhotoUrl(person.photoUrl) ? person.photoUrl : null;
+  }
+
+  photoInitials(person: Person): string {
+    return buildPhotoInitials(person.firstName, person.lastName);
+  }
+
+  nodePhotoClipId(personId: string): string {
+    return `tree-node-photo-${personId}`;
   }
 
   nodeRoleLabel(node: TreeDiagramNode): string {
@@ -693,7 +750,7 @@ function isTreeNodeTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(".tree-node-group") !== null;
 }
 
-function wrapNodeTitle(value: string): string[] {
+function wrapNodeTitle(value: string, limit = 18): string[] {
   const words = value.trim().split(/\s+/).filter(Boolean);
 
   if (words.length === 0) {
@@ -707,8 +764,8 @@ function wrapNodeTitle(value: string): string[] {
     const word = words[index];
 
     if (firstLine.length === 0) {
-      if (word.length > 18) {
-        firstLine = fitWord(word, 18);
+      if (word.length > limit) {
+        firstLine = fitWord(word, limit);
         index += 1;
         break;
       }
@@ -720,7 +777,7 @@ function wrapNodeTitle(value: string): string[] {
 
     const candidate = `${firstLine} ${word}`;
 
-    if (candidate.length > 18) {
+    if (candidate.length > limit) {
       break;
     }
 
@@ -732,7 +789,7 @@ function wrapNodeTitle(value: string): string[] {
     return [firstLine];
   }
 
-  return [firstLine, truncate(words.slice(index).join(" "), 18)];
+  return [firstLine, truncate(words.slice(index).join(" "), limit)];
 }
 
 function wrapNodeMeta(values: Array<string | null>, limit = 24): string[] {

@@ -14,6 +14,7 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angula
 import { MatSnackBar } from "@angular/material/snack-bar";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
+import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
@@ -29,9 +30,18 @@ import { RelationshipsService } from "../services/relationships.service";
       <ng-container *ngIf="person() as person">
         <mat-card class="profile-card">
           <div class="profile-header">
-            <div class="profile-copy">
-              <h1>{{ displayName(person) }}</h1>
-              <p class="muted">{{ person.biography || "Біографія ще не додана." }}</p>
+            <div class="profile-identity">
+              <div class="profile-photo-shell">
+                <img *ngIf="renderablePhotoUrl(person); else profilePhotoFallback" [src]="renderablePhotoUrl(person)!" alt="Фото людини" class="profile-photo">
+                <ng-template #profilePhotoFallback>
+                  <div class="profile-photo-fallback">{{ photoInitials(person) }}</div>
+                </ng-template>
+              </div>
+
+              <div class="profile-copy">
+                <h1>{{ displayName(person) }}</h1>
+                <p class="muted">{{ person.biography || "Біографія ще не додана." }}</p>
+              </div>
             </div>
 
             <div class="profile-actions" *ngIf="isOwnProfile(); else readOnlyProfileNotice">
@@ -53,7 +63,6 @@ import { RelationshipsService } from "../services/relationships.service";
             <mat-card appearance="outlined" class="detail-item" *ngIf="person.deathDate"><span>Дата смерті</span><strong>{{ person.deathDate }}</strong></mat-card>
             <mat-card appearance="outlined" class="detail-item"><span>Місце народження</span><strong>{{ person.birthPlace || "—" }}</strong></mat-card>
             <mat-card appearance="outlined" class="detail-item" *ngIf="person.deathPlace"><span>Місце смерті</span><strong>{{ person.deathPlace }}</strong></mat-card>
-            <mat-card appearance="outlined" class="detail-item"><span>Посилання на фото</span><strong>{{ person.photoUrl || "—" }}</strong></mat-card>
           </div>
         </mat-card>
 
@@ -216,6 +225,48 @@ import { RelationshipsService } from "../services/relationships.service";
         margin-bottom: 20px;
       }
 
+      .profile-identity {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        min-width: 0;
+      }
+
+      .profile-photo-shell {
+        width: 120px;
+        height: 120px;
+        flex: 0 0 auto;
+        overflow: hidden;
+        border-radius: 32px;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background: linear-gradient(180deg, rgba(233, 241, 251, 0.92), rgba(219, 233, 248, 0.92));
+        box-shadow: 0 16px 34px rgba(41, 69, 103, 0.12);
+      }
+
+      .profile-photo,
+      .profile-photo-fallback {
+        width: 100%;
+        height: 100%;
+      }
+
+      .profile-photo {
+        display: block;
+        object-fit: cover;
+      }
+
+      .profile-photo-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        font-weight: 800;
+        color: #234261;
+      }
+
+      .profile-copy {
+        min-width: 0;
+      }
+
       .profile-header h1 {
         margin: 12px 0 8px;
       }
@@ -345,6 +396,10 @@ import { RelationshipsService } from "../services/relationships.service";
         .profile-header {
           flex-direction: column;
         }
+
+        .profile-identity {
+          width: 100%;
+        }
       }
 
       @media (max-width: 860px) {
@@ -356,6 +411,17 @@ import { RelationshipsService } from "../services/relationships.service";
       }
 
       @media (max-width: 640px) {
+        .profile-identity {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .profile-photo-shell {
+          width: 104px;
+          height: 104px;
+          border-radius: 28px;
+        }
+
         .profile-header h1 {
           font-size: 30px;
         }
@@ -485,6 +551,14 @@ export class PersonDetailsPageComponent {
 
   displayName(person: Person): string {
     return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+  }
+
+  renderablePhotoUrl(person: Person): string | null {
+    return isSupportedPhotoUrl(person.photoUrl) ? person.photoUrl : null;
+  }
+
+  photoInitials(person: Person): string {
+    return buildPhotoInitials(person.firstName, person.lastName);
   }
 
   genderLabel(gender: Person["gender"]): string {

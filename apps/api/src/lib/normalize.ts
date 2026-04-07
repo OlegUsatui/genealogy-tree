@@ -4,6 +4,9 @@ import { HttpError } from "./http";
 
 const allowedGenders: Gender[] = ["male", "female", "other", "unknown"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const remotePhotoUrlPattern = /^https?:\/\/\S+$/i;
+const dataPhotoUrlPattern = /^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i;
+const maxPhotoUrlLength = 500_000;
 
 function normalizeOptionalString(value: unknown): string | null {
   if (value === undefined || value === null) {
@@ -12,6 +15,24 @@ function normalizeOptionalString(value: unknown): string | null {
 
   const normalized = String(value).trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizePhotoUrl(value: unknown): string | null {
+  const normalized = normalizeOptionalString(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length > maxPhotoUrlLength) {
+    throw new HttpError(400, "Фото завелике. Оберіть менший файл.");
+  }
+
+  if (!remotePhotoUrlPattern.test(normalized) && !dataPhotoUrlPattern.test(normalized)) {
+    throw new HttpError(400, "Поле photoUrl має бути http(s) URL або data:image");
+  }
+
+  return normalized;
 }
 
 function normalizeGender(value: unknown): Gender {
@@ -72,7 +93,7 @@ export function normalizeCreatePersonDto(input: CreatePersonDto): NormalizedPers
     deathPlace: normalizeOptionalString(input.deathPlace),
     biography: normalizeOptionalString(input.biography),
     isLiving: normalizeIsLiving(input.isLiving),
-    photoUrl: normalizeOptionalString(input.photoUrl),
+    photoUrl: normalizePhotoUrl(input.photoUrl),
   };
 }
 
@@ -130,7 +151,7 @@ export function normalizeUpdatePersonDto(input: UpdatePersonDto): Partial<Normal
   }
 
   if ("photoUrl" in input) {
-    result.photoUrl = normalizeOptionalString(input.photoUrl);
+    result.photoUrl = normalizePhotoUrl(input.photoUrl);
   }
 
   return result;

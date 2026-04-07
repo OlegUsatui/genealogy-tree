@@ -7,6 +7,8 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
+import { PhotoCropDialogComponent } from "../components/photo-crop-dialog.component";
+import { buildPhotoInitials, isSupportedPhotoUrl, optimizePhotoFile, validatePhotoFile } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
@@ -16,7 +18,7 @@ type LivingOption = "unknown" | "true" | "false";
 
 @Component({
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, PhotoCropDialogComponent, ...MATERIAL_IMPORTS],
   template: `
     <section class="app-page">
       <mat-card class="form-shell">
@@ -91,12 +93,41 @@ type LivingOption = "unknown" | "true" | "false";
                 <input matInput id="deathPlace" formControlName="deathPlace">
               </mat-form-field>
             </ng-container>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Посилання на фото</mat-label>
-              <input matInput id="photoUrl" formControlName="photoUrl">
-            </mat-form-field>
           </div>
+
+          <section class="photo-section">
+            <div class="photo-preview-shell">
+              <img *ngIf="photoPreviewUrl(); else photoFallback" [src]="photoPreviewUrl()!" alt="Фото профілю" class="photo-preview">
+              <ng-template #photoFallback>
+                <div class="photo-fallback">{{ photoInitials() }}</div>
+              </ng-template>
+            </div>
+
+            <div class="photo-copy">
+              <div>
+                <h2>Фотографія</h2>
+                <p class="muted">Оберіть фото людини. Перед збереженням ми автоматично стиснемо файл.</p>
+              </div>
+
+            <div class="photo-actions">
+              <label class="photo-upload-button">
+                <input type="file" accept="image/*" class="photo-input" (change)="onPhotoSelected($event)">
+                <span>{{ isProcessingPhoto() ? "Обробка..." : "Завантажити фото" }}</span>
+                </label>
+                <button
+                  *ngIf="form.controls.photoUrl.value"
+                  mat-button
+                  type="button"
+                  [disabled]="isProcessingPhoto()"
+                  (click)="removePhoto()"
+                >
+                  Прибрати фото
+                </button>
+              </div>
+
+              <p class="error-text" *ngIf="photoErrorMessage()">{{ photoErrorMessage() }}</p>
+            </div>
+          </section>
 
           <mat-form-field appearance="outline">
             <mat-label>Біографія</mat-label>
@@ -140,6 +171,13 @@ type LivingOption = "unknown" | "true" | "false";
         </mat-card>
       </mat-card>
     </section>
+
+    <app-photo-crop-dialog
+      *ngIf="cropSourceFile() as cropFile"
+      [file]="cropFile"
+      (cancelCrop)="closePhotoCrop()"
+      (saveCrop)="applyCroppedPhoto($event)"
+    ></app-photo-crop-dialog>
   `,
   styles: [
     `
@@ -169,6 +207,93 @@ type LivingOption = "unknown" | "true" | "false";
         display: flex;
         flex-direction: column;
         gap: 14px;
+      }
+
+      .photo-section {
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 18px;
+        align-items: center;
+        padding: 18px;
+        border-radius: 24px;
+        border: 1px solid rgba(127, 160, 200, 0.16);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+      }
+
+      .photo-preview-shell {
+        width: 132px;
+        height: 132px;
+        border-radius: 28px;
+        overflow: hidden;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background: linear-gradient(180deg, rgba(233, 241, 251, 0.92), rgba(219, 233, 248, 0.92));
+        box-shadow: 0 14px 30px rgba(41, 69, 103, 0.12);
+      }
+
+      .photo-preview,
+      .photo-fallback {
+        width: 100%;
+        height: 100%;
+      }
+
+      .photo-preview {
+        display: block;
+        object-fit: cover;
+      }
+
+      .photo-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        font-weight: 800;
+        color: #234261;
+      }
+
+      .photo-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .photo-copy h2,
+      .photo-copy p {
+        margin: 0;
+      }
+
+      .photo-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .photo-upload-button {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(53, 90, 136, 0.26);
+        background: rgba(255, 255, 255, 0.92);
+        color: #17324d;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .photo-upload-button:hover {
+        border-color: rgba(53, 90, 136, 0.38);
+      }
+
+      .photo-input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
       }
 
       .form-actions {
@@ -216,9 +341,20 @@ type LivingOption = "unknown" | "true" | "false";
           font-size: 30px;
         }
 
+        .photo-section {
+          grid-template-columns: 1fr;
+        }
+
+        .photo-preview-shell {
+          width: 120px;
+          height: 120px;
+        }
+
         .form-link,
         .form-actions > .mat-mdc-button-base,
-        .danger-button {
+        .danger-button,
+        .photo-actions > .mat-mdc-button-base,
+        .photo-upload-button {
           width: 100%;
           justify-content: center;
         }
@@ -242,6 +378,10 @@ export class PersonFormPageComponent {
   readonly isDeletingAccount = signal(false);
   readonly errorMessage = signal("");
   readonly deleteAccountError = signal("");
+  readonly photoPreviewUrl = signal<string | null>(null);
+  readonly photoErrorMessage = signal("");
+  readonly isProcessingPhoto = signal(false);
+  readonly cropSourceFile = signal<File | null>(null);
 
   readonly form = new FormGroup({
     firstName: new FormControl("", {
@@ -290,6 +430,8 @@ export class PersonFormPageComponent {
           isLiving: "unknown",
           photoUrl: "",
         });
+        this.photoPreviewUrl.set(null);
+        this.photoErrorMessage.set("");
       }
     });
   }
@@ -325,6 +467,60 @@ export class PersonFormPageComponent {
 
   isOwnProfile(): boolean {
     return this.personId() !== null && this.personId() === this.authService.user()?.primaryPersonId;
+  }
+
+  photoInitials(): string {
+    return buildPhotoInitials(this.form.controls.firstName.value, this.form.controls.lastName.value);
+  }
+
+  async onPhotoSelected(event: Event): Promise<void> {
+    const input = event.target;
+
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const file = input.files?.[0];
+    input.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    this.photoErrorMessage.set("");
+
+    try {
+      validatePhotoFile(file);
+      this.cropSourceFile.set(file);
+    } catch (error) {
+      this.photoErrorMessage.set(readUploadError(error));
+    }
+  }
+
+  removePhoto(): void {
+    this.form.controls.photoUrl.setValue("");
+    this.photoPreviewUrl.set(null);
+    this.photoErrorMessage.set("");
+  }
+
+  closePhotoCrop(): void {
+    this.cropSourceFile.set(null);
+  }
+
+  async applyCroppedPhoto(file: File): Promise<void> {
+    this.cropSourceFile.set(null);
+    this.photoErrorMessage.set("");
+    this.isProcessingPhoto.set(true);
+
+    try {
+      const photoUrl = await optimizePhotoFile(file);
+      this.form.controls.photoUrl.setValue(photoUrl);
+      this.photoPreviewUrl.set(photoUrl);
+    } catch (error) {
+      this.photoErrorMessage.set(readUploadError(error));
+    } finally {
+      this.isProcessingPhoto.set(false);
+    }
   }
 
   async deleteCurrentAccount(): Promise<void> {
@@ -371,6 +567,8 @@ export class PersonFormPageComponent {
         isLiving: person.isLiving === null ? "unknown" : person.isLiving ? "true" : "false",
         photoUrl: person.photoUrl ?? "",
       });
+      this.photoPreviewUrl.set(isSupportedPhotoUrl(person.photoUrl) ? person.photoUrl : null);
+      this.photoErrorMessage.set("");
     } catch (error) {
       this.errorMessage.set(readApiError(error));
     }
@@ -418,4 +616,8 @@ function readApiError(error: unknown): string {
   }
 
   return "Помилка запиту";
+}
+
+function readUploadError(error: unknown): string {
+  return error instanceof Error ? error.message : "Не вдалося обробити фото";
 }
