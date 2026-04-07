@@ -227,7 +227,7 @@ export function normalizeCreateUserDto(input: CreateUserDto): NormalizedCreateUs
       password: input.password,
       personMode: "existing",
       existingPersonId,
-      person: null,
+      person: input.person ? normalizeCreatePersonDto(input.person) : null,
     };
   }
 

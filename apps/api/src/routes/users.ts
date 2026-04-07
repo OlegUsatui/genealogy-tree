@@ -38,6 +38,30 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
       throw new HttpError(404, "Обрану людину не знайдено");
     }
 
+    if (input.person) {
+      const duplicate = await findDuplicatePersonByIdentity(
+        env.DB,
+        {
+          firstName: input.person.firstName,
+          lastName: input.person.lastName,
+          birthDate: input.person.birthDate,
+        },
+        existingPerson.id,
+      );
+
+      if (duplicate) {
+        throw new HttpError(
+          409,
+          "Неможливо зберегти профіль: людина з таким ім’ям, прізвищем і датою народження вже існує.",
+          {
+            code: "person_duplicate",
+            personId: duplicate.id,
+            personName: formatPersonName(duplicate),
+          },
+        );
+      }
+    }
+
     primaryPersonId = existingPerson.id;
 
     await env.DB.prepare(
@@ -57,6 +81,38 @@ export async function createUser(request: Request, env: Env): Promise<Response> 
 
     try {
       await grantPersonPermission(env.DB, userId, primaryPersonId, "owner");
+
+      if (input.person) {
+        await env.DB.prepare(
+          `
+            UPDATE global_persons
+            SET
+              first_name = ?,
+              last_name = ?,
+              middle_name = ?,
+              maiden_name = ?,
+              gender = ?,
+              birth_date = ?,
+              birth_place = ?,
+              is_living = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+          .bind(
+            input.person.firstName,
+            input.person.lastName,
+            input.person.middleName,
+            input.person.maidenName,
+            input.person.gender,
+            input.person.birthDate,
+            input.person.birthPlace,
+            toDbBoolean(input.person.isLiving ?? null),
+            timestamp,
+            primaryPersonId,
+          )
+          .run();
+      }
     } catch (error) {
       await cleanupUserCreation(env.DB, userId);
       throw error;

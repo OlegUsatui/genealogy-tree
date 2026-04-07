@@ -1,10 +1,4 @@
-import type {
-  CreateUserDto,
-  Person,
-  RegistrationPersonCandidate,
-  RegistrationPersonMode,
-  UserAccount,
-} from "@family-tree/shared";
+import type { CreateUserDto, Person, RegistrationPersonCandidate, UserAccount } from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
@@ -27,10 +21,10 @@ type LivingOption = "unknown" | "true" | "false";
       <mat-card class="user-form-shell">
         <div class="form-header">
           <div>
-            <h1>Новий користувач</h1>
+            <h1>Створення акаунту</h1>
             <p class="muted">
-              Створіть обліковий запис і відразу визначте, хто ви в дереві: оберіть наявну картку або
-              створіть свою базову картку.
+              Заповніть свої дані. Якщо ми знайдемо ваш профіль у сімейному дереві, ви зможете просто
+              обрати його, відредагувати дані за потреби і завершити реєстрацію без дубля.
             </p>
           </div>
 
@@ -66,113 +60,116 @@ type LivingOption = "unknown" | "true" | "false";
 
           <mat-card appearance="outlined" class="section-card">
             <div class="section-copy">
-              <h2>Хто ви в дереві</h2>
+              <h2>Ваш профіль у дереві</h2>
               <p class="muted">
-                Обрана або створена картка стане центральною людиною вашого акаунту і відкриється як
-                “Мій профіль”.
+                Почніть вводити свої ім’я, прізвище і дату народження. Якщо така людина вже є в базі,
+                ми запропонуємо її тут же, без окремого пошуку.
               </p>
             </div>
 
-            <mat-form-field appearance="outline">
-              <mat-label>Як додати вас до дерева</mat-label>
-              <mat-select formControlName="personMode">
-                <mat-option value="new">Створити мою картку</mat-option>
-                <mat-option value="existing">Я вже є у списку</mat-option>
-              </mat-select>
-            </mat-form-field>
+            <div class="selected-match" *ngIf="selectedExistingCandidate() as selected">
+              <div class="selected-match-copy">
+                <span class="selected-match-eyebrow">Ви реєструєтесь як наявна людина</span>
+                <strong>{{ candidateHeadline(selected) }}</strong>
+                <span class="muted">
+                  Дані нижче вже підтягнуті з дерева. Ви можете підправити їх перед збереженням.
+                </span>
+              </div>
 
-            <ng-container *ngIf="isExistingMode(); else createPersonFields">
-              <mat-form-field appearance="outline" class="field-wide">
-                <mat-label>Пошук себе у загальній базі</mat-label>
-                <input
-                  matInput
-                  formControlName="searchQuery"
-                  placeholder="Почніть вводити прізвище або ім’я"
-                  [matAutocomplete]="personAutocomplete"
-                >
-                <mat-autocomplete
-                  #personAutocomplete="matAutocomplete"
-                  [displayWith]="displaySelectedCandidate"
-                  (optionSelected)="selectCandidate($event.option.value)"
-                >
-                  <mat-option *ngFor="let candidate of searchResults()" [value]="candidate">
-                    <div class="candidate-option">
-                      <span class="candidate-title">{{ candidateHeadline(candidate) }}</span>
-                      <span class="candidate-meta">{{ candidateDetails(candidate) }}</span>
-                    </div>
-                  </mat-option>
-                </mat-autocomplete>
+              <button mat-stroked-button type="button" (click)="clearExistingSelection()">
+                Це не я
+              </button>
+            </div>
+
+            <div class="field-grid">
+              <mat-form-field appearance="outline">
+                <mat-label>Ім’я</mat-label>
+                <input matInput formControlName="firstName">
               </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Прізвище</mat-label>
+                <input matInput formControlName="lastName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>По батькові / друге ім’я</mat-label>
+                <input matInput formControlName="middleName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Дівоче прізвище</mat-label>
+                <input matInput formControlName="maidenName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Стать</mat-label>
+                <mat-select formControlName="gender">
+                  <mat-option value="unknown">не вказано</mat-option>
+                  <mat-option value="male">чоловіча</mat-option>
+                  <mat-option value="female">жіноча</mat-option>
+                  <mat-option value="other">інша</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Статус життя</mat-label>
+                <mat-select formControlName="isLiving">
+                  <mat-option value="true">живий / жива</mat-option>
+                  <mat-option value="false">помер / померла</mat-option>
+                  <mat-option value="unknown">не вказано</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Дата народження</mat-label>
+                <input matInput type="date" formControlName="birthDate">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Місце народження</mat-label>
+                <input matInput formControlName="birthPlace">
+              </mat-form-field>
+            </div>
+
+            <p class="muted helper-text">
+              Дата народження обов’язкова: вона потрібна, щоб не створювати дублікати.
+            </p>
+
+            <div class="match-panel" *ngIf="showMatchPanel()">
+              <div class="match-panel-copy">
+                <h3>{{ matchPanelTitle() }}</h3>
+                <p class="muted">{{ matchPanelDescription() }}</p>
+              </div>
 
               <mat-progress-bar *ngIf="isSearching()" mode="indeterminate"></mat-progress-bar>
 
-              <p class="muted helper-text">
-                Введіть щонайменше 3 літери. Пошук виконується на бекенді по всій базі людей.
-              </p>
-
               <p class="error-text" *ngIf="searchErrorMessage()">{{ searchErrorMessage() }}</p>
 
-              <p class="muted helper-text" *ngIf="hasSearched() && !isSearching() && searchResults().length === 0">
-                Збігів не знайдено. Перемкніться на створення нової картки і введіть свої дані вручну.
-              </p>
-
-              <p class="error-text" *ngIf="showExistingSelectionError()">
-                Оберіть себе зі списку або створіть нову картку.
-              </p>
-            </ng-container>
-
-            <ng-template #createPersonFields>
-              <div class="field-grid">
-                <mat-form-field appearance="outline">
-                  <mat-label>Ім’я</mat-label>
-                  <input matInput formControlName="firstName">
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Прізвище</mat-label>
-                  <input matInput formControlName="lastName">
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>По батькові / друге ім’я</mat-label>
-                  <input matInput formControlName="middleName">
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Дівоче прізвище</mat-label>
-                  <input matInput formControlName="maidenName">
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Стать</mat-label>
-                  <mat-select formControlName="gender">
-                    <mat-option value="unknown">не вказано</mat-option>
-                    <mat-option value="male">чоловіча</mat-option>
-                    <mat-option value="female">жіноча</mat-option>
-                    <mat-option value="other">інша</mat-option>
-                  </mat-select>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Статус життя</mat-label>
-                  <mat-select formControlName="isLiving">
-                    <mat-option value="true">живий / жива</mat-option>
-                    <mat-option value="false">помер / померла</mat-option>
-                    <mat-option value="unknown">не вказано</mat-option>
-                  </mat-select>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Дата народження</mat-label>
-                  <input matInput type="date" formControlName="birthDate">
-                </mat-form-field>
-
-                <mat-form-field appearance="outline">
-                  <mat-label>Місце народження</mat-label>
-                  <input matInput formControlName="birthPlace">
-                </mat-form-field>
+              <div class="match-options" *ngIf="suggestedMatches().length > 0">
+                <button
+                  *ngFor="let candidate of suggestedMatches()"
+                  type="button"
+                  class="match-option"
+                  [class.match-option--exact]="isExactIdentityMatch(candidate)"
+                  (click)="selectCandidate(candidate)"
+                >
+                  <div class="match-option-copy">
+                    <div class="match-option-title-row">
+                      <span class="match-option-title">{{ candidateHeadline(candidate) }}</span>
+                      <span class="match-badge" *ngIf="isExactIdentityMatch(candidate)">Точний збіг</span>
+                    </div>
+                    <span class="match-option-meta">{{ candidateDetails(candidate) }}</span>
+                  </div>
+                  <span class="match-option-action">Використати</span>
+                </button>
               </div>
-            </ng-template>
+
+              <p class="muted helper-text" *ngIf="showNoMatchesMessage()">
+                Поки що збігів не видно. Якщо це нова людина, просто завершіть реєстрацію і ми створимо
+                для вас новий профіль.
+              </p>
+            </div>
           </mat-card>
 
           <p class="error-text" *ngIf="showPasswordMismatch()">Паролі не збігаються</p>
@@ -185,7 +182,7 @@ type LivingOption = "unknown" | "true" | "false";
               type="submit"
               [disabled]="form.invalid || isSaving() || passwordsMismatch()"
             >
-              {{ isSaving() ? "Створення..." : "Створити акаунт" }}
+              {{ submitLabel() }}
             </button>
           </div>
         </form>
@@ -229,12 +226,13 @@ type LivingOption = "unknown" | "true" | "false";
         padding: 18px;
       }
 
-      .section-copy h2 {
+      .section-copy h2,
+      .match-panel-copy h3 {
         margin: 0 0 6px;
-        font-size: 20px;
       }
 
-      .section-copy p {
+      .section-copy p,
+      .match-panel-copy p {
         margin: 0;
       }
 
@@ -244,40 +242,123 @@ type LivingOption = "unknown" | "true" | "false";
         gap: 14px;
       }
 
-      .search-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 12px;
-        align-items: start;
+      .helper-text {
+        margin: 0;
       }
 
-      .field-wide {
+      .selected-match {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(225, 244, 240, 0.85), rgba(237, 247, 244, 0.94));
+        border: 1px solid rgba(93, 131, 120, 0.22);
+      }
+
+      .selected-match-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
         min-width: 0;
       }
 
-      .search-button {
-        min-height: 56px;
+      .selected-match-eyebrow {
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #3c6b5f;
       }
 
-      .candidate-option {
+      .match-panel {
         display: flex;
         flex-direction: column;
-        gap: 2px;
-        padding-block: 4px;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(247, 251, 250, 0.94);
+        border: 1px solid rgba(96, 114, 123, 0.14);
       }
 
-      .candidate-title {
+      .match-options {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .match-option {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid rgba(96, 114, 123, 0.16);
+        background: #fff;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          transform 120ms ease,
+          border-color 120ms ease,
+          box-shadow 120ms ease;
+      }
+
+      .match-option:hover {
+        transform: translateY(-1px);
+        border-color: rgba(53, 95, 83, 0.32);
+        box-shadow: 0 14px 24px rgba(31, 43, 41, 0.08);
+      }
+
+      .match-option--exact {
+        border-color: rgba(53, 95, 83, 0.36);
+        background: linear-gradient(180deg, rgba(234, 247, 243, 0.96), rgba(250, 252, 251, 0.98));
+      }
+
+      .match-option-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .match-option-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .match-option-title {
         font-weight: 700;
         color: var(--text);
       }
 
-      .candidate-meta {
+      .match-option-meta {
         font-size: 13px;
         color: var(--muted);
       }
 
-      .helper-text {
-        margin: 0;
+      .match-option-action {
+        font-size: 13px;
+        font-weight: 700;
+        color: #335e53;
+        white-space: nowrap;
+      }
+
+      .match-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(63, 112, 99, 0.12);
+        color: #355f53;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
       }
 
       .form-actions {
@@ -286,15 +367,21 @@ type LivingOption = "unknown" | "true" | "false";
       }
 
       @media (max-width: 900px) {
-        .form-header {
+        .form-header,
+        .selected-match {
           flex-direction: column;
+          align-items: stretch;
         }
       }
 
       @media (max-width: 760px) {
-        .field-grid,
-        .search-row {
+        .field-grid {
           grid-template-columns: 1fr;
+        }
+
+        .match-option {
+          flex-direction: column;
+          align-items: flex-start;
         }
       }
 
@@ -309,7 +396,8 @@ type LivingOption = "unknown" | "true" | "false";
         }
 
         .header-actions > .mat-mdc-button-base,
-        .form-actions > .mat-mdc-button-base {
+        .form-actions > .mat-mdc-button-base,
+        .selected-match > .mat-mdc-button-base {
           width: 100%;
           justify-content: center;
         }
@@ -330,6 +418,7 @@ export class UserCreatePageComponent {
   readonly errorMessage = signal("");
   readonly searchErrorMessage = signal("");
   readonly searchResults = signal<RegistrationPersonCandidate[]>([]);
+  readonly selectedExistingCandidate = signal<RegistrationPersonCandidate | null>(null);
 
   readonly form = new FormGroup({
     email: new FormControl("", {
@@ -344,60 +433,37 @@ export class UserCreatePageComponent {
       nonNullable: true,
       validators: [Validators.required],
     }),
-    personMode: new FormControl<RegistrationPersonMode>("new", {
-      nonNullable: true,
-    }),
-    searchQuery: new FormControl<string | RegistrationPersonCandidate>("", { nonNullable: true }),
     existingPersonId: new FormControl("", { nonNullable: true }),
-    firstName: new FormControl("", { nonNullable: true }),
-    lastName: new FormControl("", { nonNullable: true }),
+    firstName: new FormControl("", {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
+    lastName: new FormControl("", {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
     middleName: new FormControl("", { nonNullable: true }),
     maidenName: new FormControl("", { nonNullable: true }),
     gender: new FormControl<Person["gender"]>("unknown", { nonNullable: true }),
-    birthDate: new FormControl("", { nonNullable: true }),
+    birthDate: new FormControl("", {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
     birthPlace: new FormControl("", { nonNullable: true }),
     isLiving: new FormControl<LivingOption>("true", { nonNullable: true }),
   });
 
   constructor() {
-    this.applyPersonMode(this.form.controls.personMode.value);
-
-    this.form.controls.personMode.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((mode) => {
-      this.errorMessage.set("");
-      this.applyPersonMode(mode);
+    this.form.controls.firstName.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.onIdentityFieldsChanged();
     });
 
-    this.form.controls.searchQuery.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((value) => {
-      if (!this.isExistingMode()) {
-        return;
-      }
+    this.form.controls.lastName.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.onIdentityFieldsChanged();
+    });
 
-      if (typeof value !== "string") {
-        this.searchErrorMessage.set("");
-        this.isSearching.set(false);
-        return;
-      }
-
-      const query = value.trim();
-      this.clearSearchDebounce();
-      this.latestSearchToken += 1;
-      this.searchErrorMessage.set("");
-      this.form.controls.existingPersonId.setValue("", { emitEvent: false });
-
-      if (query.length < 3) {
-        this.hasSearched.set(false);
-        this.searchResults.set([]);
-        this.isSearching.set(false);
-        return;
-      }
-
-      const searchToken = this.latestSearchToken;
-      this.hasSearched.set(true);
-      this.isSearching.set(true);
-      this.searchResults.set([]);
-      this.searchDebounceTimer = setTimeout(() => {
-        void this.fetchSearchResults(query, searchToken);
-      }, 250);
+    this.form.controls.birthDate.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.onIdentityFieldsChanged();
     });
   }
 
@@ -411,22 +477,13 @@ export class UserCreatePageComponent {
     return this.passwordsMismatch() && (confirmPasswordControl.touched || confirmPasswordControl.dirty);
   }
 
-  isExistingMode(): boolean {
-    return this.form.controls.personMode.value === "existing";
+  submitLabel(): string {
+    return this.isSaving()
+      ? "Створення..."
+      : this.selectedExistingCandidate()
+        ? "Зареєструватися з наявним профілем"
+        : "Створити акаунт";
   }
-
-  showExistingSelectionError(): boolean {
-    const control = this.form.controls.existingPersonId;
-    return this.isExistingMode() && control.invalid && (control.touched || control.dirty);
-  }
-
-  displaySelectedCandidate = (candidate: RegistrationPersonCandidate | string | null): string => {
-    if (!candidate) {
-      return "";
-    }
-
-    return typeof candidate === "string" ? candidate : this.candidateHeadline(candidate);
-  };
 
   candidateHeadline(candidate: RegistrationPersonCandidate): string {
     return [candidate.lastName, candidate.firstName, candidate.middleName].filter(Boolean).join(" ");
@@ -437,10 +494,93 @@ export class UserCreatePageComponent {
     return details.length > 0 ? details.join(" • ") : "Дата та місто народження не вказані";
   }
 
+  showMatchPanel(): boolean {
+    return (
+      !this.selectedExistingCandidate() &&
+      (this.isSearching() ||
+        this.searchErrorMessage().length > 0 ||
+        this.suggestedMatches().length > 0 ||
+        this.showNoMatchesMessage())
+    );
+  }
+
+  showNoMatchesMessage(): boolean {
+    return this.hasSearched() && !this.isSearching() && this.searchResults().length === 0;
+  }
+
+  suggestedMatches(): RegistrationPersonCandidate[] {
+    const exact: RegistrationPersonCandidate[] = [];
+    const similar: RegistrationPersonCandidate[] = [];
+
+    for (const candidate of this.searchResults()) {
+      if (this.isExactIdentityMatch(candidate)) {
+        exact.push(candidate);
+      } else {
+        similar.push(candidate);
+      }
+    }
+
+    return [...exact, ...similar];
+  }
+
+  matchPanelTitle(): string {
+    if (this.hasExactMatches()) {
+      return "Схоже, ви вже є в цьому дереві";
+    }
+
+    return "Можливо, це вже ваш профіль";
+  }
+
+  matchPanelDescription(): string {
+    if (this.hasExactMatches()) {
+      return "Натисніть на свій профіль, і ми прив’яжемо акаунт до нього без створення дубля.";
+    }
+
+    return "Якщо бачите себе в списку, просто виберіть профіль. Якщо ні, продовжуйте реєстрацію як нова людина.";
+  }
+
+  isExactIdentityMatch(candidate: RegistrationPersonCandidate): boolean {
+    const birthDate = this.form.controls.birthDate.value.trim();
+
+    if (!birthDate || !candidate.birthDate) {
+      return false;
+    }
+
+    return (
+      normalizeIdentityValue(candidate.firstName) === normalizeIdentityValue(this.form.controls.firstName.value) &&
+      normalizeIdentityValue(candidate.lastName) === normalizeIdentityValue(this.form.controls.lastName.value) &&
+      candidate.birthDate === birthDate
+    );
+  }
+
   selectCandidate(candidate: RegistrationPersonCandidate): void {
-    this.form.controls.searchQuery.setValue(candidate, { emitEvent: false });
-    this.form.controls.existingPersonId.setValue(candidate.sourcePersonId);
+    this.selectedExistingCandidate.set(candidate);
+    this.form.controls.existingPersonId.setValue(candidate.sourcePersonId, { emitEvent: false });
+    this.form.patchValue(
+      {
+        firstName: candidate.firstName,
+        lastName: candidate.lastName ?? "",
+        middleName: candidate.middleName ?? "",
+        maidenName: candidate.maidenName ?? "",
+        gender: candidate.gender,
+        birthDate: candidate.birthDate ?? "",
+        birthPlace: candidate.birthPlace ?? "",
+        isLiving: candidate.isLiving === null ? "unknown" : candidate.isLiving ? "true" : "false",
+      },
+      { emitEvent: false },
+    );
+    this.hasSearched.set(false);
+    this.isSearching.set(false);
+    this.searchResults.set([]);
     this.searchErrorMessage.set("");
+    this.errorMessage.set("");
+  }
+
+  clearExistingSelection(): void {
+    this.selectedExistingCandidate.set(null);
+    this.form.controls.existingPersonId.setValue("", { emitEvent: false });
+    this.errorMessage.set("");
+    this.scheduleSearch();
   }
 
   async submit(): Promise<void> {
@@ -449,14 +589,17 @@ export class UserCreatePageComponent {
       return;
     }
 
+    if (!this.selectedExistingCandidate() && this.hasExactMatches()) {
+      this.errorMessage.set("Ми вже знайшли такий профіль у дереві. Оберіть його зі списку, щоб не створити дубль.");
+      return;
+    }
+
     this.isSaving.set(true);
     this.errorMessage.set("");
 
     try {
       const payload = toCreateUserPayload(this.form.getRawValue());
-      const createdUser = await awaitOne<UserAccount>(
-        this.usersService.create(payload),
-      );
+      await awaitOne<UserAccount>(this.usersService.create(payload));
 
       await this.router.navigate(["/login"], {
         queryParams: {
@@ -470,40 +613,55 @@ export class UserCreatePageComponent {
     }
   }
 
-  private applyPersonMode(mode: RegistrationPersonMode): void {
-    if (mode === "existing") {
-      this.form.controls.existingPersonId.setValidators([Validators.required]);
-      this.form.controls.firstName.clearValidators();
-    } else {
-      this.clearSearchDebounce();
-      this.latestSearchToken += 1;
-      this.isSearching.set(false);
-      this.form.controls.existingPersonId.clearValidators();
-      this.form.controls.firstName.setValidators([Validators.required]);
-      this.hasSearched.set(false);
-      this.searchErrorMessage.set("");
-      this.searchResults.set([]);
-      this.form.controls.searchQuery.setValue("", { emitEvent: false });
-      this.form.controls.existingPersonId.setValue("", { emitEvent: false });
+  private onIdentityFieldsChanged(): void {
+    this.errorMessage.set("");
+
+    if (this.selectedExistingCandidate()) {
+      return;
     }
 
-    this.form.controls.existingPersonId.updateValueAndValidity({ emitEvent: false });
-    this.form.controls.firstName.updateValueAndValidity({ emitEvent: false });
+    this.form.controls.existingPersonId.setValue("", { emitEvent: false });
+    this.scheduleSearch();
+  }
+
+  private hasExactMatches(): boolean {
+    return this.searchResults().some((candidate) => this.isExactIdentityMatch(candidate));
+  }
+
+  private scheduleSearch(): void {
+    this.clearSearchDebounce();
+    this.latestSearchToken += 1;
+    this.searchErrorMessage.set("");
+
+    const query = buildRegistrationQuery(this.form.controls.firstName.value, this.form.controls.lastName.value);
+
+    if (!query) {
+      this.hasSearched.set(false);
+      this.searchResults.set([]);
+      this.isSearching.set(false);
+      return;
+    }
+
+    const searchToken = this.latestSearchToken;
+    this.hasSearched.set(true);
+    this.isSearching.set(true);
+    this.searchResults.set([]);
+    this.searchDebounceTimer = setTimeout(() => {
+      void this.fetchSearchResults(query, searchToken);
+    }, 250);
   }
 
   private async fetchSearchResults(query: string, searchToken: number): Promise<void> {
     try {
-      const results = await awaitOne<RegistrationPersonCandidate[]>(
-        this.usersService.searchRegistrationCandidates(query),
-      );
+      const results = await awaitOne<RegistrationPersonCandidate[]>(this.usersService.searchRegistrationCandidates(query));
 
-      if (searchToken !== this.latestSearchToken) {
+      if (searchToken !== this.latestSearchToken || this.selectedExistingCandidate()) {
         return;
       }
 
       this.searchResults.set(results);
     } catch (error) {
-      if (searchToken !== this.latestSearchToken) {
+      if (searchToken !== this.latestSearchToken || this.selectedExistingCandidate()) {
         return;
       }
 
@@ -528,8 +686,6 @@ function toCreateUserPayload(value: {
   email: string;
   password: string;
   confirmPassword: string;
-  personMode: RegistrationPersonMode;
-  searchQuery: string | RegistrationPersonCandidate;
   existingPersonId: string;
   firstName: string;
   lastName: string;
@@ -540,30 +696,38 @@ function toCreateUserPayload(value: {
   birthPlace: string;
   isLiving: LivingOption;
 }): CreateUserDto {
-  if (value.personMode === "existing") {
-    return {
-      email: value.email.trim(),
-      password: value.password,
-      personMode: "existing",
-      existingPersonId: value.existingPersonId,
-    };
-  }
-
   return {
     email: value.email.trim(),
     password: value.password,
-    personMode: "new",
+    personMode: value.existingPersonId ? "existing" : "new",
+    existingPersonId: emptyToNull(value.existingPersonId),
     person: {
-      firstName: value.firstName,
-      lastName: emptyToNull(value.lastName),
+      firstName: value.firstName.trim(),
+      lastName: value.lastName.trim(),
       middleName: emptyToNull(value.middleName),
       maidenName: emptyToNull(value.maidenName),
       gender: value.gender,
-      birthDate: emptyToNull(value.birthDate),
+      birthDate: value.birthDate.trim(),
       birthPlace: emptyToNull(value.birthPlace),
       isLiving: value.isLiving === "unknown" ? null : value.isLiving === "true",
     },
   };
+}
+
+function buildRegistrationQuery(firstName: string, lastName: string): string | null {
+  const normalizedFirstName = firstName.trim();
+  const normalizedLastName = lastName.trim();
+  const combinedLength = normalizedFirstName.length + normalizedLastName.length;
+
+  if (normalizedFirstName.length < 2 || normalizedLastName.length < 2 || combinedLength < 4) {
+    return null;
+  }
+
+  return [normalizedLastName, normalizedFirstName].filter(Boolean).join(" ");
+}
+
+function normalizeIdentityValue(value: string | null | undefined): string {
+  return value?.trim().toLocaleLowerCase("uk-UA") ?? "";
 }
 
 function emptyToNull(value: string): string | null {
@@ -573,6 +737,10 @@ function emptyToNull(value: string): string | null {
 
 function readApiError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
+    if (error.error?.code === "person_duplicate") {
+      return "Такий профіль уже є в дереві. Оберіть його зі списку вище, щоб зареєструватися без дубля.";
+    }
+
     return error.error?.error ?? "Не вдалося створити користувача";
   }
 
