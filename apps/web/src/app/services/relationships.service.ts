@@ -23,6 +23,10 @@ export class RelationshipsService {
     return this.api.post<Relationship>("/relationships", payload);
   }
 
+  update(relationshipId: string, payload: CreateRelationshipDto) {
+    return this.api.patch<Relationship>(`/relationships/${relationshipId}`, payload);
+  }
+
   createWithDirectoryPerson(directoryPersonId: string, payload: CreateDirectoryRelationshipDto) {
     return this.api.post<CreateDirectoryRelationshipResponse>(`/directory/persons/${directoryPersonId}/relationships`, payload);
   }

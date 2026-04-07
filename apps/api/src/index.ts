@@ -10,7 +10,13 @@ import {
   importDirectoryPerson,
   updatePerson,
 } from "./routes/persons";
-import { createDirectoryRelationship, createRelationship, deleteRelationship, getRelationships } from "./routes/relationships";
+import {
+  createDirectoryRelationship,
+  createRelationship,
+  deleteRelationship,
+  getRelationships,
+  updateRelationship,
+} from "./routes/relationships";
 import { getTree } from "./routes/tree";
 import { login, logout, me } from "./routes/auth";
 import { searchPersons, searchRegistrationPersons } from "./routes/search";
@@ -153,6 +159,15 @@ async function routeRequest(
   }
 
   const relationshipMatch = pathname.match(/^\/api\/relationships\/([^/]+)$/);
+
+  if (relationshipMatch && request.method === "PATCH") {
+    return updateRelationship(
+      request,
+      env,
+      requireAuthenticatedUser(currentUser),
+      decodeURIComponent(relationshipMatch[1]),
+    );
+  }
 
   if (relationshipMatch && request.method === "DELETE") {
     return deleteRelationship(env, requireAuthenticatedUser(currentUser), decodeURIComponent(relationshipMatch[1]));

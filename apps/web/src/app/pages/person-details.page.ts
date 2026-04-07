@@ -79,16 +79,35 @@ import { RelationshipsService } from "../services/relationships.service";
               <div class="column-heading">
                 <h3>Батьки</h3>
               </div>
-              <div *ngIf="parents().length > 0; else emptyParents">
-                <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of parents()">
-                  <div>
-                    <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                      {{ displayName(item.relatedPerson) }}
-                    </a>
-                    <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
-                  </div>
-                  <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-                </mat-card>
+              <div
+                class="relationship-dropzone"
+                [class.relationship-dropzone--active]="activeDropGroup() === 'parents'"
+                [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
+                (dragover)="onRelationshipDragOver($event)"
+                (dragenter)="onRelationshipDragEnter('parents', $event)"
+                (drop)="onRelationshipDrop('parents', $event)"
+              >
+                <ng-container *ngIf="parents().length > 0; else emptyParents">
+                  <mat-card
+                    appearance="outlined"
+                    class="relationship-row"
+                    *ngFor="let item of parents()"
+                    [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
+                    [attr.draggable]="!isSubmittingRelationship()"
+                    (dragstart)="onRelationshipDragStart($event, item)"
+                    (dragend)="onRelationshipDragEnd()"
+                  >
+                    <div class="relationship-row-main">
+                      <div>
+                        <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                          {{ displayName(item.relatedPerson) }}
+                        </a>
+                        <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
+                      </div>
+                    </div>
+                    <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                  </mat-card>
+                </ng-container>
               </div>
               <ng-template #emptyParents><div class="empty-state">Батьки не вказані.</div></ng-template>
             </div>
@@ -97,16 +116,35 @@ import { RelationshipsService } from "../services/relationships.service";
               <div class="column-heading">
                 <h3>Партнери</h3>
               </div>
-              <div *ngIf="spouses().length > 0; else emptySpouses">
-                <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of spouses()">
-                  <div>
-                    <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                      {{ displayName(item.relatedPerson) }}
-                    </a>
-                    <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
-                  </div>
-                  <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-                </mat-card>
+              <div
+                class="relationship-dropzone"
+                [class.relationship-dropzone--active]="activeDropGroup() === 'spouses'"
+                [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
+                (dragover)="onRelationshipDragOver($event)"
+                (dragenter)="onRelationshipDragEnter('spouses', $event)"
+                (drop)="onRelationshipDrop('spouses', $event)"
+              >
+                <ng-container *ngIf="spouses().length > 0; else emptySpouses">
+                  <mat-card
+                    appearance="outlined"
+                    class="relationship-row"
+                    *ngFor="let item of spouses()"
+                    [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
+                    [attr.draggable]="!isSubmittingRelationship()"
+                    (dragstart)="onRelationshipDragStart($event, item)"
+                    (dragend)="onRelationshipDragEnd()"
+                  >
+                    <div class="relationship-row-main">
+                      <div>
+                        <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                          {{ displayName(item.relatedPerson) }}
+                        </a>
+                        <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
+                      </div>
+                    </div>
+                    <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                  </mat-card>
+                </ng-container>
               </div>
               <ng-template #emptySpouses><div class="empty-state">Партнери не вказані.</div></ng-template>
             </div>
@@ -115,16 +153,35 @@ import { RelationshipsService } from "../services/relationships.service";
               <div class="column-heading">
                 <h3>Діти</h3>
               </div>
-              <div *ngIf="children().length > 0; else emptyChildren">
-                <mat-card appearance="outlined" class="relationship-row" *ngFor="let item of children()">
-                  <div>
-                    <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                      {{ displayName(item.relatedPerson) }}
-                    </a>
-                    <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
-                  </div>
-                  <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-                </mat-card>
+              <div
+                class="relationship-dropzone"
+                [class.relationship-dropzone--active]="activeDropGroup() === 'children'"
+                [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
+                (dragover)="onRelationshipDragOver($event)"
+                (dragenter)="onRelationshipDragEnter('children', $event)"
+                (drop)="onRelationshipDrop('children', $event)"
+              >
+                <ng-container *ngIf="children().length > 0; else emptyChildren">
+                  <mat-card
+                    appearance="outlined"
+                    class="relationship-row"
+                    *ngFor="let item of children()"
+                    [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
+                    [attr.draggable]="!isSubmittingRelationship()"
+                    (dragstart)="onRelationshipDragStart($event, item)"
+                    (dragend)="onRelationshipDragEnd()"
+                  >
+                    <div class="relationship-row-main">
+                      <div>
+                        <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                          {{ displayName(item.relatedPerson) }}
+                        </a>
+                        <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
+                      </div>
+                    </div>
+                    <button mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                  </mat-card>
+                </ng-container>
               </div>
               <ng-template #emptyChildren><div class="empty-state">Діти не вказані.</div></ng-template>
             </div>
@@ -357,6 +414,27 @@ import { RelationshipsService } from "../services/relationships.service";
         margin: 0;
       }
 
+      .relationship-dropzone {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 92px;
+        padding: 6px;
+        border-radius: 18px;
+        transition: background-color 160ms ease, box-shadow 160ms ease;
+      }
+
+      .relationship-dropzone--active {
+        background: rgba(225, 237, 252, 0.72);
+        box-shadow: inset 0 0 0 1px rgba(127, 160, 200, 0.22);
+      }
+
+      .relationship-dropzone--dragging .relationship-row,
+      .relationship-dropzone--dragging .relationship-row * {
+        pointer-events: none;
+      }
+
       .relationship-row {
         display: flex;
         align-items: center;
@@ -367,10 +445,23 @@ import { RelationshipsService } from "../services/relationships.service";
           linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.98)),
           linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
         border-color: rgba(127, 160, 200, 0.16) !important;
+        cursor: grab;
+      }
+
+      .relationship-row-main {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        flex: 1 1 auto;
       }
 
       .relationship-row p {
         margin: 4px 0 0;
+      }
+
+      .relationship-row--dragging {
+        opacity: 0.45;
       }
 
       .person-link {
@@ -407,6 +498,10 @@ import { RelationshipsService } from "../services/relationships.service";
         .relationship-row {
           flex-direction: column;
           align-items: flex-start;
+        }
+
+        .relationship-row-main {
+          width: 100%;
         }
       }
 
@@ -459,6 +554,8 @@ export class PersonDetailsPageComponent {
   readonly errorMessage = signal("");
   readonly isOwnProfile = signal(false);
   readonly isSubmittingRelationship = signal(false);
+  readonly draggedRelationshipId = signal<string | null>(null);
+  readonly activeDropGroup = signal<RelationshipGroup | null>(null);
 
   readonly relationshipForm = new FormGroup({
     type: new FormControl<Relationship["type"]>("parent_child", {
@@ -516,7 +613,7 @@ export class PersonDetailsPageComponent {
 
     return this.relationships()
       .filter((relationship) => relationship.type === "parent_child" && relationship.person2Id === current.id)
-      .map((relationship) => this.createRelationshipView(relationship, relationship.person1Id))
+      .map((relationship) => this.createRelationshipView(relationship, relationship.person1Id, "parents"))
       .filter(Boolean) as RelationshipView[];
   }
 
@@ -529,7 +626,7 @@ export class PersonDetailsPageComponent {
 
     return this.relationships()
       .filter((relationship) => relationship.type === "parent_child" && relationship.person1Id === current.id)
-      .map((relationship) => this.createRelationshipView(relationship, relationship.person2Id))
+      .map((relationship) => this.createRelationshipView(relationship, relationship.person2Id, "children"))
       .filter(Boolean) as RelationshipView[];
   }
 
@@ -544,7 +641,7 @@ export class PersonDetailsPageComponent {
       .filter((relationship) => relationship.type === "spouse")
       .map((relationship) => {
         const relatedPersonId = relationship.person1Id === current.id ? relationship.person2Id : relationship.person1Id;
-        return this.createRelationshipView(relationship, relatedPersonId);
+        return this.createRelationshipView(relationship, relatedPersonId, "spouses");
       })
       .filter(Boolean) as RelationshipView[];
   }
@@ -629,6 +726,85 @@ export class PersonDetailsPageComponent {
     }
   }
 
+  onRelationshipDragStart(event: DragEvent, relationshipView: RelationshipView): void {
+    if (!this.isOwnProfile() || this.isSubmittingRelationship()) {
+      event.preventDefault();
+      return;
+    }
+
+    this.draggedRelationshipId.set(relationshipView.relationship.id);
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", relationshipView.relationship.id);
+    }
+  }
+
+  onRelationshipDragEnd(): void {
+    this.draggedRelationshipId.set(null);
+    this.activeDropGroup.set(null);
+  }
+
+  onRelationshipDragOver(event: DragEvent): void {
+    if (!this.draggedRelationshipId()) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  }
+
+  onRelationshipDragEnter(group: RelationshipGroup, event: DragEvent): void {
+    if (!this.draggedRelationshipId()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.activeDropGroup.set(group);
+  }
+
+  async onRelationshipDrop(targetGroup: RelationshipGroup, event: DragEvent): Promise<void> {
+    event.preventDefault();
+
+    const currentPerson = this.person();
+    const relationshipId = this.draggedRelationshipId();
+    const relationshipView = relationshipId ? this.findRelationshipViewByRelationshipId(relationshipId) : null;
+
+    if (
+      !currentPerson ||
+      !this.isOwnProfile() ||
+      !relationshipView ||
+      relationshipView.group === targetGroup ||
+      this.isSubmittingRelationship()
+    ) {
+      this.activeDropGroup.set(null);
+      return;
+    }
+
+    this.isSubmittingRelationship.set(true);
+    this.errorMessage.set("");
+
+    try {
+      await awaitOne<Relationship>(
+        this.relationshipsService.update(
+          relationshipView.relationship.id,
+          buildRelationshipPayloadForGroup(currentPerson.id, relationshipView, targetGroup),
+        ),
+      );
+      this.snackBar.open("Зв’язок оновлено", "Закрити", { duration: 2500 });
+      await this.loadPage(currentPerson.id);
+    } catch (error) {
+      this.errorMessage.set(readApiError(error));
+    } finally {
+      this.isSubmittingRelationship.set(false);
+      this.draggedRelationshipId.set(null);
+      this.activeDropGroup.set(null);
+    }
+  }
+
   async deletePerson(): Promise<void> {
     const currentPerson = this.person();
 
@@ -693,6 +869,7 @@ export class PersonDetailsPageComponent {
   private createRelationshipView(
     relationship: Relationship,
     relatedPersonId: string,
+    group: RelationshipGroup,
   ): RelationshipView | null {
     const relatedPerson = this.allPersons().find((person) => person.id === relatedPersonId);
 
@@ -701,16 +878,26 @@ export class PersonDetailsPageComponent {
     }
 
     return {
+      group,
       relationship,
       relatedPerson,
     };
   }
+
+  private findRelationshipViewByRelationshipId(relationshipId: string): RelationshipView | null {
+    return [...this.parents(), ...this.spouses(), ...this.children()].find(
+      (item) => item.relationship.id === relationshipId,
+    ) ?? null;
+  }
 }
 
 interface RelationshipView {
+  group: RelationshipGroup;
   relationship: Relationship;
   relatedPerson: Person;
 }
+
+type RelationshipGroup = "parents" | "spouses" | "children";
 
 function buildRelationshipPayload(
   currentPersonId: string,
@@ -743,6 +930,32 @@ function buildRelationshipPayload(
     startDate: emptyToNull(value.startDate),
     endDate: emptyToNull(value.endDate),
     notes: emptyToNull(value.notes),
+  };
+}
+
+function buildRelationshipPayloadForGroup(
+  currentPersonId: string,
+  relationshipView: RelationshipView,
+  targetGroup: RelationshipGroup,
+): CreateRelationshipDto {
+  if (targetGroup === "spouses") {
+    return {
+      type: "spouse",
+      person1Id: currentPersonId,
+      person2Id: relationshipView.relatedPerson.id,
+      startDate: relationshipView.group === "spouses" ? relationshipView.relationship.startDate : null,
+      endDate: relationshipView.group === "spouses" ? relationshipView.relationship.endDate : null,
+      notes: relationshipView.relationship.notes,
+    };
+  }
+
+  return {
+    type: "parent_child",
+    person1Id: targetGroup === "children" ? currentPersonId : relationshipView.relatedPerson.id,
+    person2Id: targetGroup === "children" ? relationshipView.relatedPerson.id : currentPersonId,
+    startDate: null,
+    endDate: null,
+    notes: relationshipView.relationship.notes,
   };
 }
 

@@ -611,7 +611,7 @@ export class TreePageComponent {
     this.isLoading.set(true);
 
     try {
-      const tree = await awaitOne<TreeResponse>(this.treeService.getTree(personId, 2, 2));
+      const tree = await awaitOne<TreeResponse>(this.treeService.getTree(personId, 4, 4));
       const diagram = buildTreeDiagram(tree);
       this.rootPersonId.set(personId);
       this.tree.set(tree);

@@ -79,7 +79,7 @@ export async function getTree(
 
 function clampDepth(value: string | null): number {
   if (!value) {
-    return 2;
+    return 4;
   }
 
   const parsed = Number.parseInt(value, 10);

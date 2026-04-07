@@ -180,6 +180,163 @@ export async function createRelationshipForUser(
   return mapRelationshipRow(row);
 }
 
+export async function syncRelationshipAcrossAccounts(
+  db: D1Database,
+  input: {
+    userId: string;
+    type: RelationshipType;
+    person1Id: string;
+    person2Id: string;
+    startDate?: string | null;
+    endDate?: string | null;
+    notes?: string | null;
+  },
+): Promise<Relationship> {
+  const sourcePerson1 = await getPersonRowByUserAndId(db, input.userId, input.person1Id);
+  const sourcePerson2 = await getPersonRowByUserAndId(db, input.userId, input.person2Id);
+
+  if (!sourcePerson1 || !sourcePerson2) {
+    throw new HttpError(404, "Одну або кілька людей не знайдено");
+  }
+
+  const canonicalPerson1 = (await getCanonicalPersonRowByAnyId(db, sourcePerson1.id)) ?? sourcePerson1;
+  const canonicalPerson2 = (await getCanonicalPersonRowByAnyId(db, sourcePerson2.id)) ?? sourcePerson2;
+  const affectedUserIds = await listAffectedUserIdsByCanonicalIds(db, [
+    getCanonicalPersonId(canonicalPerson1),
+    getCanonicalPersonId(canonicalPerson2),
+  ]);
+
+  if (!affectedUserIds.includes(input.userId)) {
+    affectedUserIds.push(input.userId);
+  }
+
+  let currentUserRelationship: Relationship | null = null;
+
+  for (const targetUserId of affectedUserIds) {
+    const targetPerson1 =
+      targetUserId === input.userId
+        ? sourcePerson1
+        : await ensureCanonicalPersonAvailableInUser(db, canonicalPerson1, targetUserId);
+    const targetPerson2 =
+      targetUserId === input.userId
+        ? sourcePerson2
+        : await ensureCanonicalPersonAvailableInUser(db, canonicalPerson2, targetUserId);
+
+    if (!targetPerson1 || !targetPerson2 || targetPerson1.id === targetPerson2.id) {
+      continue;
+    }
+
+    const relationship = await createRelationshipForUser(db, {
+      userId: targetUserId,
+      type: input.type,
+      person1Id: targetPerson1.id,
+      person2Id: targetPerson2.id,
+      startDate: input.startDate ?? null,
+      endDate: input.endDate ?? null,
+      notes: input.notes ?? null,
+    });
+
+    if (targetUserId === input.userId) {
+      currentUserRelationship = relationship;
+    }
+  }
+
+  if (!currentUserRelationship) {
+    throw new HttpError(500, "Не вдалося створити зв’язок");
+  }
+
+  return currentUserRelationship;
+}
+
+export async function replaceRelationshipAcrossAccounts(
+  db: D1Database,
+  input: {
+    userId: string;
+    relationshipId: string;
+    type: RelationshipType;
+    person1Id: string;
+    person2Id: string;
+    startDate?: string | null;
+    endDate?: string | null;
+    notes?: string | null;
+  },
+): Promise<Relationship> {
+  const existingRelationship = await getRelationshipRowByUserAndId(db, input.userId, input.relationshipId);
+
+  if (!existingRelationship) {
+    throw new HttpError(404, "Зв’язок не знайдено");
+  }
+
+  const sourcePerson1 = await getPersonRowByUserAndId(db, input.userId, input.person1Id);
+  const sourcePerson2 = await getPersonRowByUserAndId(db, input.userId, input.person2Id);
+
+  if (!sourcePerson1 || !sourcePerson2) {
+    throw new HttpError(404, "Одну або кілька людей не знайдено");
+  }
+
+  const existingPerson1 = await getPersonRowByUserAndId(db, input.userId, existingRelationship.person1_id);
+  const existingPerson2 = await getPersonRowByUserAndId(db, input.userId, existingRelationship.person2_id);
+  const canonicalIds = [
+    getCanonicalPersonId((await getCanonicalPersonRowByAnyId(db, sourcePerson1.id)) ?? sourcePerson1),
+    getCanonicalPersonId((await getCanonicalPersonRowByAnyId(db, sourcePerson2.id)) ?? sourcePerson2),
+  ];
+
+  if (existingPerson1) {
+    canonicalIds.push(getCanonicalPersonId((await getCanonicalPersonRowByAnyId(db, existingPerson1.id)) ?? existingPerson1));
+  }
+
+  if (existingPerson2) {
+    canonicalIds.push(getCanonicalPersonId((await getCanonicalPersonRowByAnyId(db, existingPerson2.id)) ?? existingPerson2));
+  }
+
+  const affectedUserIds = await listAffectedUserIdsByCanonicalIds(db, canonicalIds);
+
+  if (!affectedUserIds.includes(input.userId)) {
+    affectedUserIds.push(input.userId);
+  }
+
+  let currentUserRelationship: Relationship | null = null;
+
+  for (const targetUserId of affectedUserIds) {
+    const targetPerson1 = await ensureCanonicalPersonAvailableInUser(
+      db,
+      (await getCanonicalPersonRowByAnyId(db, sourcePerson1.id)) ?? sourcePerson1,
+      targetUserId,
+    );
+    const targetPerson2 = await ensureCanonicalPersonAvailableInUser(
+      db,
+      (await getCanonicalPersonRowByAnyId(db, sourcePerson2.id)) ?? sourcePerson2,
+      targetUserId,
+    );
+
+    if (!targetPerson1 || !targetPerson2 || targetPerson1.id === targetPerson2.id) {
+      continue;
+    }
+
+    await deleteRelationshipsBetweenPersonsForUser(db, targetUserId, targetPerson1.id, targetPerson2.id);
+
+    const relationship = await createRelationshipForUser(db, {
+      userId: targetUserId,
+      type: input.type,
+      person1Id: targetPerson1.id,
+      person2Id: targetPerson2.id,
+      startDate: input.startDate ?? null,
+      endDate: input.endDate ?? null,
+      notes: input.notes ?? null,
+    });
+
+    if (targetUserId === input.userId) {
+      currentUserRelationship = relationship;
+    }
+  }
+
+  if (!currentUserRelationship) {
+    throw new HttpError(500, "Не вдалося оновити зв’язок");
+  }
+
+  return currentUserRelationship;
+}
+
 async function createImportedPerson(
   db: D1Database,
   targetUserId: string,
@@ -300,6 +457,25 @@ async function createRelationshipRow(
   return createdRelationship;
 }
 
+async function getPersonRowByUserAndId(
+  db: D1Database,
+  userId: string,
+  personId: string,
+): Promise<PersonRow | null> {
+  return db.prepare("SELECT * FROM persons WHERE user_id = ? AND id = ?").bind(userId, personId).first<PersonRow>();
+}
+
+async function getRelationshipRowByUserAndId(
+  db: D1Database,
+  userId: string,
+  relationshipId: string,
+): Promise<RelationshipRow | null> {
+  return db
+    .prepare("SELECT * FROM relationships WHERE user_id = ? AND id = ?")
+    .bind(userId, relationshipId)
+    .first<RelationshipRow>();
+}
+
 async function listPersonRowsByUser(db: D1Database, userId: string): Promise<PersonRow[]> {
   const result = await db
     .prepare("SELECT * FROM persons WHERE user_id = ? ORDER BY created_at")
@@ -316,6 +492,69 @@ async function listRelationshipRowsByUser(db: D1Database, userId: string): Promi
     .all<RelationshipRow>();
 
   return result.results;
+}
+
+async function listAffectedUserIdsByCanonicalIds(db: D1Database, canonicalIds: string[]): Promise<string[]> {
+  const uniqueCanonicalIds = [...new Set(canonicalIds)];
+
+  if (uniqueCanonicalIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = createPlaceholders(uniqueCanonicalIds.length);
+  const result = await db
+    .prepare(
+      `
+        SELECT DISTINCT user_id
+        FROM persons
+        WHERE id IN (${placeholders})
+          OR source_person_id IN (${placeholders})
+        ORDER BY user_id
+      `,
+    )
+    .bind(...uniqueCanonicalIds, ...uniqueCanonicalIds)
+    .all<{ user_id: string }>();
+
+  return result.results.map((row) => row.user_id);
+}
+
+async function ensureCanonicalPersonAvailableInUser(
+  db: D1Database,
+  canonicalPerson: PersonRow,
+  targetUserId: string,
+): Promise<PersonRow | null> {
+  const canonicalId = getCanonicalPersonId(canonicalPerson);
+  let localPerson = await findLocalPersonRowByCanonicalId(db, targetUserId, canonicalId);
+
+  if (localPerson) {
+    return localPerson;
+  }
+
+  if (canonicalPerson.user_id === targetUserId) {
+    return canonicalPerson;
+  }
+
+  return createImportedPerson(db, targetUserId, canonicalId, canonicalPerson);
+}
+
+async function findLocalPersonRowByCanonicalId(
+  db: D1Database,
+  userId: string,
+  canonicalId: string,
+): Promise<PersonRow | null> {
+  return db
+    .prepare(
+      `
+        SELECT *
+        FROM persons
+        WHERE user_id = ?
+          AND (id = ? OR source_person_id = ?)
+        ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, created_at
+        LIMIT 1
+      `,
+    )
+    .bind(userId, canonicalId, canonicalId, canonicalId)
+    .first<PersonRow>();
 }
 
 async function findExistingRelationship(
@@ -360,8 +599,45 @@ async function findExistingRelationship(
     .first<RelationshipRow>();
 }
 
+async function deleteRelationshipsBetweenPersonsForUser(
+  db: D1Database,
+  userId: string,
+  person1Id: string,
+  person2Id: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `
+        DELETE FROM relationships
+        WHERE user_id = ?
+          AND (
+            (
+              type = 'spouse'
+              AND (
+                (person1_id = ? AND person2_id = ?)
+                OR (person1_id = ? AND person2_id = ?)
+              )
+            )
+            OR (
+              type = 'parent_child'
+              AND (
+                (person1_id = ? AND person2_id = ?)
+                OR (person1_id = ? AND person2_id = ?)
+              )
+            )
+          )
+      `,
+    )
+    .bind(userId, person1Id, person2Id, person2Id, person1Id, person1Id, person2Id, person2Id, person1Id)
+    .run();
+}
+
 function getCanonicalPersonId(person: Pick<PersonRow, "id" | "source_person_id">): string {
   return person.source_person_id ?? person.id;
+}
+
+function createPlaceholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 function collectConnectedPersonIds(rootPersonId: string, relationships: RelationshipRow[]): Set<string> {

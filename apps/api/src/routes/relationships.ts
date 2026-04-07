@@ -6,12 +6,13 @@ import type {
   SessionUser,
 } from "@family-tree/shared";
 
-import { getPersonById, getRelationshipById, listRelationshipsByPersonId, mapRelationshipRow, personsExist } from "../lib/db";
+import { getPersonById, getRelationshipById, listRelationshipsByPersonId, personsExist } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
 import {
-  createRelationshipForUser,
   ensurePersonGraphImported,
   getCanonicalPersonRowByAnyId,
+  replaceRelationshipAcrossAccounts,
+  syncRelationshipAcrossAccounts,
 } from "../lib/person-graph";
 import { normalizeCreateRelationshipDto } from "../lib/normalize";
 import type { Env } from "../types";
@@ -61,48 +62,17 @@ export async function createRelationship(
   if (duplicate) {
     throw new HttpError(409, "Такий зв’язок уже існує");
   }
+  const relationship = await syncRelationshipAcrossAccounts(env.DB, {
+    userId: currentUser.id,
+    type: input.type,
+    person1Id: input.person1Id,
+    person2Id: input.person2Id,
+    startDate: input.startDate ?? null,
+    endDate: input.endDate ?? null,
+    notes: input.notes ?? null,
+  });
 
-  const relationshipId = crypto.randomUUID();
-  const timestamp = new Date().toISOString();
-
-  await env.DB.prepare(
-    `
-      INSERT INTO relationships (
-        id,
-        user_id,
-        type,
-        person1_id,
-        person2_id,
-        start_date,
-        end_date,
-        notes,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-  )
-    .bind(
-      relationshipId,
-      currentUser.id,
-      input.type,
-      input.person1Id,
-      input.person2Id,
-      input.startDate ?? null,
-      input.endDate ?? null,
-      input.notes ?? null,
-      timestamp,
-    )
-    .run();
-
-  const row = await env.DB
-    .prepare("SELECT * FROM relationships WHERE user_id = ? AND id = ?")
-    .bind(currentUser.id, relationshipId)
-    .first<RelationshipRow>();
-
-  if (!row) {
-    throw new HttpError(500, "Не вдалося створити зв’язок");
-  }
-
-  return json(mapRelationshipRow(row), { status: 201 });
+  return json(relationship, { status: 201 });
 }
 
 export async function createDirectoryRelationship(
@@ -131,25 +101,10 @@ export async function createDirectoryRelationship(
   }
 
   const localPayload = buildRelationshipPayload(currentAccountPerson.id, input);
-  const relationship = await createRelationshipForUser(env.DB, {
+  const relationship = await syncRelationshipAcrossAccounts(env.DB, {
     userId: currentUser.id,
     ...localPayload,
   });
-
-  if (sourcePerson.user_id !== currentUser.id) {
-    const mirroredLocalPerson = await ensurePersonGraphImported(env.DB, currentUser.id, input.localPersonId, sourcePerson.user_id);
-    const mirroredPayload = buildRelationshipPayload(sourcePerson.id, {
-      ...input,
-      localPersonId: mirroredLocalPerson.id,
-    });
-
-    if (mirroredPayload.person1Id !== mirroredPayload.person2Id) {
-      await createRelationshipForUser(env.DB, {
-        userId: sourcePerson.user_id,
-        ...mirroredPayload,
-      });
-    }
-  }
 
   const response: CreateDirectoryRelationshipResponse = {
     person: currentAccountPerson,
@@ -172,6 +127,38 @@ export async function deleteRelationship(
 
   await env.DB.prepare("DELETE FROM relationships WHERE user_id = ? AND id = ?").bind(currentUser.id, relationshipId).run();
   return noContent();
+}
+
+export async function updateRelationship(
+  request: Request,
+  env: Env,
+  currentUser: SessionUser,
+  relationshipId: string,
+): Promise<Response> {
+  const existing = await getRelationshipById(env.DB, currentUser.id, relationshipId);
+
+  if (!existing) {
+    throw new HttpError(404, "Зв’язок не знайдено");
+  }
+
+  const input = normalizeCreateRelationshipDto(await readJson<CreateRelationshipDto>(request));
+
+  if (!(await personsExist(env.DB, currentUser.id, [input.person1Id, input.person2Id]))) {
+    throw new HttpError(404, "Одну або кілька людей не знайдено");
+  }
+
+  const relationship = await replaceRelationshipAcrossAccounts(env.DB, {
+    userId: currentUser.id,
+    relationshipId,
+    type: input.type,
+    person1Id: input.person1Id,
+    person2Id: input.person2Id,
+    startDate: input.startDate ?? null,
+    endDate: input.endDate ?? null,
+    notes: input.notes ?? null,
+  });
+
+  return json(relationship);
 }
 
 async function findDuplicateRelationship(
