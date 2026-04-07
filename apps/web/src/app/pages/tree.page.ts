@@ -25,6 +25,22 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
         </div>
 
+        <div class="node-action-backdrop" *ngIf="nodeActionMenu()" (click)="closeNodeActionMenu()"></div>
+        <div
+          class="node-action-menu"
+          *ngIf="nodeActionMenu() as menu"
+          [style.left.px]="menu.left"
+          [style.top.px]="menu.top"
+          (click)="$event.stopPropagation()"
+        >
+          <button mat-flat-button color="primary" type="button" (click)="openPersonProfile(menu.personId)">
+            Профіль
+          </button>
+          <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
+            Дерево
+          </button>
+        </div>
+
         <div
           #viewport
           class="diagram-scroll"
@@ -67,8 +83,9 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
                 [class.ancestor-node]="node.role === 'ancestor'"
                 [class.descendant-node]="node.role === 'descendant'"
                 [class.spouse-node]="node.role === 'spouse'"
+                [class.node-action-open]="nodeActionMenu()?.personId === node.person.id"
                 [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
-                (click)="focusPerson(node.person.id)"
+                (click)="openNodeActionMenu(node.person.id, $event)"
               >
                 <rect
                   class="tree-node-card"
@@ -158,6 +175,28 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         flex-direction: column;
         gap: 10px;
         pointer-events: none;
+      }
+
+      .node-action-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 4;
+      }
+
+      .node-action-menu {
+        position: fixed;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 168px;
+        padding: 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
+        box-shadow: 0 18px 40px rgba(31, 53, 79, 0.18);
       }
 
       .tree-error {
@@ -256,15 +295,16 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         cursor: pointer;
       }
 
+      .tree-node-group.node-action-open .tree-node-card,
+      .tree-node-group:hover .tree-node-card {
+        stroke: rgba(31, 103, 198, 0.42);
+      }
+
       .tree-node-card {
         stroke: rgba(66, 108, 161, 0.16);
         stroke-width: 1.5;
         filter: url(#nodeShadow);
         transition: transform 0.18s ease, stroke 0.18s ease;
-      }
-
-      .tree-node-group:hover .tree-node-card {
-        stroke: rgba(31, 103, 198, 0.42);
       }
 
       .root-node .tree-node-card {
@@ -358,6 +398,7 @@ export class TreePageComponent {
   readonly zoom = signal(1);
   readonly panX = signal(0);
   readonly panY = signal(0);
+  readonly nodeActionMenu = signal<NodeActionMenuState | null>(null);
   readonly minZoom = 0.04;
   readonly maxZoom = 10;
 
@@ -446,10 +487,52 @@ export class TreePageComponent {
     }
   }
 
-  async focusPerson(personId: string): Promise<void> {
+  openNodeActionMenu(personId: string, event: MouseEvent): void {
     if (this.suppressNodeClick) {
       return;
     }
+
+    event.stopPropagation();
+
+    const currentTarget = event.currentTarget;
+
+    if (!(currentTarget instanceof SVGGraphicsElement)) {
+      return;
+    }
+
+    const rect = currentTarget.getBoundingClientRect();
+    const menuWidth = 168;
+    const menuHeight = 112;
+    const viewportMargin = 16;
+    const preferredLeft = rect.right + 12;
+    const fallbackLeft = rect.left - menuWidth - 12;
+    const left = preferredLeft + menuWidth + viewportMargin <= window.innerWidth
+      ? preferredLeft
+      : Math.max(viewportMargin, fallbackLeft);
+    const top = clamp(
+      rect.top + rect.height / 2 - menuHeight / 2,
+      viewportMargin,
+      window.innerHeight - menuHeight - viewportMargin,
+    );
+
+    this.nodeActionMenu.set({
+      personId,
+      left,
+      top,
+    });
+  }
+
+  closeNodeActionMenu(): void {
+    this.nodeActionMenu.set(null);
+  }
+
+  async openPersonProfile(personId: string): Promise<void> {
+    this.closeNodeActionMenu();
+    await this.router.navigate(["/persons", personId]);
+  }
+
+  async openPersonTree(personId: string): Promise<void> {
+    this.closeNodeActionMenu();
 
     if (personId === this.rootPersonId()) {
       await this.loadTree(personId);
@@ -472,6 +555,7 @@ export class TreePageComponent {
   }
 
   startPan(event: PointerEvent): void {
+    this.closeNodeActionMenu();
     const viewport = event.currentTarget;
 
     if (!(viewport instanceof HTMLElement)) {
@@ -607,6 +691,7 @@ export class TreePageComponent {
   }
 
   private async loadTree(personId: string): Promise<void> {
+    this.closeNodeActionMenu();
     this.errorMessage.set("");
     this.isLoading.set(true);
 
@@ -740,6 +825,12 @@ export class TreePageComponent {
       this.suppressNodeClick = false;
     }, 0);
   }
+}
+
+interface NodeActionMenuState {
+  personId: string;
+  left: number;
+  top: number;
 }
 
 function truncate(value: string, limit: number): string {
