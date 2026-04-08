@@ -1,4 +1,4 @@
-import type { Person, Relationship } from "@family-tree/shared";
+import type { FamilyGraphResponse, Person, Relationship } from "@family-tree/shared";
 
 import type { DbNullable } from "../types";
 
@@ -45,6 +45,10 @@ type PrimaryPersonRow = {
 
 type CountRow = {
   count: number;
+};
+
+type AdminRow = {
+  is_admin: number | null;
 };
 
 export function mapPersonRow(row: PersonRow, canEdit = false): Person {
@@ -267,7 +271,48 @@ export async function getSpouseRelationshipsForPersons(
   return result.results.map(mapRelationshipRow);
 }
 
+export async function getConnectedFamilyGraph(
+  db: D1Database,
+  userId: string,
+  focusPersonId: string,
+): Promise<FamilyGraphResponse> {
+  const personIds = await listConnectedPersonIds(db, focusPersonId);
+  const persons = await getPersonsByIds(db, userId, personIds);
+
+  if (personIds.length === 0) {
+    return {
+      focusPersonId,
+      persons: [],
+      relationships: [],
+    };
+  }
+
+  const placeholders = createPlaceholders(personIds.length);
+  const relationshipsResult = await db
+    .prepare(
+      `
+        SELECT *
+        FROM global_relationships
+        WHERE person1_id IN (${placeholders})
+          OR person2_id IN (${placeholders})
+        ORDER BY created_at
+      `,
+    )
+    .bind(...personIds, ...personIds)
+    .all<RelationshipRow>();
+
+  return {
+    focusPersonId,
+    persons,
+    relationships: relationshipsResult.results.map(mapRelationshipRow),
+  };
+}
+
 export async function canEditPerson(db: D1Database, userId: string, personId: string): Promise<boolean> {
+  if (await isUserAdmin(db, userId)) {
+    return true;
+  }
+
   const row = await db
     .prepare(
       `
@@ -290,6 +335,10 @@ export async function canEditAnyPerson(
   userId: string,
   personIds: string[],
 ): Promise<boolean> {
+  if (await isUserAdmin(db, userId)) {
+    return personIds.length > 0;
+  }
+
   const uniqueIds = [...new Set(personIds)];
 
   if (uniqueIds.length === 0) {
@@ -353,6 +402,15 @@ export async function countOtherPersonPermissions(
     .first<CountRow>();
 
   return Number(row?.count ?? 0);
+}
+
+export async function isUserAdmin(db: D1Database, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT is_admin FROM users WHERE id = ?")
+    .bind(userId)
+    .first<AdminRow>();
+
+  return row?.is_admin === 1;
 }
 
 export async function findDuplicatePersonByIdentity(
@@ -432,6 +490,15 @@ async function listEditablePersonIds(
 ): Promise<string[]> {
   if (personIds && personIds.length === 0) {
     return [];
+  }
+
+  if (await isUserAdmin(db, userId)) {
+    if (personIds) {
+      return [...new Set(personIds)];
+    }
+
+    const result = await db.prepare("SELECT id AS person_id FROM global_persons").all<PermissionRow>();
+    return result.results.map((row) => row.person_id);
   }
 
   const scopedClause = personIds ? ` AND person_id IN (${createPlaceholders(personIds.length)})` : "";

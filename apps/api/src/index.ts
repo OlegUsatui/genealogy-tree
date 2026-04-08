@@ -2,6 +2,7 @@ import type { SessionUser } from "@family-tree/shared";
 
 import { deleteAccount } from "./routes/account";
 import { addSelfToPublicFamily, createFamilyShare, getPublicFamilyTree } from "./routes/family-spaces";
+import { getFamilyGraph } from "./routes/graph";
 import {
   checkDuplicatePerson,
   createPerson,
@@ -32,6 +33,7 @@ const protectedPrefixes = [
   "/api/persons",
   "/api/directory",
   "/api/family-spaces",
+  "/api/graph",
   "/api/relationships",
   "/api/tree",
   "/api/search",
@@ -198,6 +200,12 @@ async function routeRequest(
 
   if (request.method === "GET" && pathname === "/api/search") {
     return searchPersons(url, env, requireAuthenticatedUser(currentUser));
+  }
+
+  const graphMatch = pathname.match(/^\/api\/graph\/([^/]+)$/);
+
+  if (graphMatch && request.method === "GET") {
+    return getFamilyGraph(env, requireAuthenticatedUser(currentUser), decodeURIComponent(graphMatch[1]));
   }
 
   const treeMatch = pathname.match(/^\/api\/tree\/([^/]+)$/);

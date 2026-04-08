@@ -4,7 +4,7 @@ import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { ActivatedRoute, Router } from "@angular/router";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatSnackBar } from "@angular/material/snack-bar";
 
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
@@ -18,12 +18,15 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
 
 @Component({
   standalone: true,
-  imports: [CommonModule, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
     <ng-container *ngIf="diagram() as diagram; else emptyState">
       <section class="tree-page">
         <div class="tree-hud" *ngIf="isLoading() || errorMessage() || rootPersonId()">
           <div class="tree-hud-actions" *ngIf="rootPersonId()">
+            <a mat-stroked-button [routerLink]="['/graph', rootPersonId()]">
+              Мережа родини
+            </a>
             <button
               mat-flat-button
               color="primary"
@@ -72,6 +75,9 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           </button>
           <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
             Дерево
+          </button>
+          <button mat-stroked-button type="button" (click)="openPersonGraph(menu.personId)">
+            Мережа
           </button>
           <div class="node-action-divider"></div>
           <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'parents')">
@@ -228,6 +234,8 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
       .tree-hud-actions {
         display: flex;
         justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 10px;
       }
 
       .share-card {
@@ -654,7 +662,7 @@ export class TreePageComponent {
 
     const rect = currentTarget.getBoundingClientRect();
     const menuWidth = 168;
-    const menuHeight = 112;
+    const menuHeight = 320;
     const viewportMargin = 16;
     const preferredLeft = rect.right + 12;
     const fallbackLeft = rect.left - menuWidth - 12;
@@ -692,6 +700,11 @@ export class TreePageComponent {
     }
 
     await this.router.navigate(["/tree", personId]);
+  }
+
+  async openPersonGraph(personId: string): Promise<void> {
+    this.closeNodeActionMenu();
+    await this.router.navigate(["/graph", personId]);
   }
 
   async openCreateRelative(personId: string, group: "parents" | "children" | "spouses"): Promise<void> {

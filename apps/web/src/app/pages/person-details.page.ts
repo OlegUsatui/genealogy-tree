@@ -46,12 +46,14 @@ import { RelationshipsService } from "../services/relationships.service";
             <div class="profile-actions" *ngIf="isOwnProfile(); else readOnlyProfileNotice">
               <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id, 'edit']" class="action-link">Редагувати</a>
               <a mat-button [routerLink]="['/tree', person.id]" class="action-link">Відкрити дерево</a>
+              <a mat-button [routerLink]="['/graph', person.id]" class="action-link">Мережа родини</a>
               <button mat-stroked-button type="button" class="danger-button" (click)="deletePerson()">Видалити</button>
             </div>
 
             <ng-template #readOnlyProfileNotice>
               <div class="profile-notice">
                 <p class="muted">Профіль уже є в спільному дереві. Щоб пов’язати його зі своєю гілкою, створи зв’язок нижче.</p>
+                <a mat-button [routerLink]="['/graph', person.id]" class="action-link">Подивитися всю мережу родини</a>
               </div>
             </ng-template>
           </div>

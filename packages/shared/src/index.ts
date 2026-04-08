@@ -81,6 +81,12 @@ export interface TreeResponse {
   relationships: Relationship[];
 }
 
+export interface FamilyGraphResponse {
+  focusPersonId: string;
+  persons: Person[];
+  relationships: Relationship[];
+}
+
 export interface LoginDto {
   email: string;
   password: string;

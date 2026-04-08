@@ -7,6 +7,7 @@ import {
   getPersonById,
   getPersonByIdGlobal,
   grantPersonPermission,
+  isUserAdmin,
   listPersons,
 } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
@@ -301,11 +302,14 @@ export async function deletePerson(env: Env, currentUser: SessionUser, personId:
     throw new HttpError(400, "Не можна видалити власний профіль");
   }
 
-  if ((await countOtherPersonPermissions(env.DB, personId, currentUser.id)) > 0) {
+  const currentUserIsAdmin = await isUserAdmin(env.DB, currentUser.id);
+
+  if (!currentUserIsAdmin && (await countOtherPersonPermissions(env.DB, personId, currentUser.id)) > 0) {
     throw new HttpError(409, "Не можна видалити спільний профіль, який уже використовується іншими акаунтами");
   }
 
   await env.DB.batch([
+    env.DB.prepare("UPDATE users SET primary_person_id = NULL WHERE primary_person_id = ?").bind(personId),
     env.DB.prepare("DELETE FROM global_relationships WHERE person1_id = ? OR person2_id = ?").bind(personId, personId),
     env.DB.prepare("DELETE FROM person_permissions WHERE person_id = ?").bind(personId),
     env.DB.prepare("DELETE FROM global_persons WHERE id = ?").bind(personId),
