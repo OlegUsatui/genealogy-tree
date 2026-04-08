@@ -1,6 +1,11 @@
 name = "family-tree-api"
 main = "src/index.ts"
 compatibility_date = "2026-04-06"
+workers_dev = true
+
+[[routes]]
+pattern = "myfamilytree.me"
+custom_domain = true
 
 [assets]
 directory = "../web/dist/web/browser"
