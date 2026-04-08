@@ -9,6 +9,7 @@ const levelGap = 224;
 const siblingGap = 108;
 const spouseGap = 62;
 const spouseStackGap = 22;
+const spouseCollisionGap = 26;
 const diagramPadding = 128;
 
 interface HierarchyNodeData {
@@ -279,16 +280,31 @@ function buildSpouseNodes(
       .forEach((entry, index) => {
         const offset = index - (entries.length - 1) / 2;
         const cy = anchor.cy + offset * (nodeHeight + spouseStackGap);
-        const cx = anchor.cx + nodeWidth + spouseGap;
-        const spouseNode = createDiagramNode(cx, cy, entry.person, "spouse");
+        const spouseNode = createDiagramNode(anchor.cx + nodeWidth + spouseGap, cy, entry.person, "spouse");
 
         spouseNode.key = `spouse-${anchor.person.id}-${entry.person.id}`;
+        placeSpouseNode(spouseNode, anchor, [...primaryNodes.values(), ...spouseNodes]);
         spouseNodes.push(spouseNode);
         links.push(createSpouseLink(`spouse-${entry.relationship.id}`, anchor, spouseNode));
       });
   }
 
   return spouseNodes;
+}
+
+function placeSpouseNode(
+  spouseNode: InternalDiagramNode,
+  anchor: InternalDiagramNode,
+  occupiedNodes: InternalDiagramNode[],
+): void {
+  const rightX = anchor.x + anchor.width + spouseGap;
+  const leftX = anchor.x - spouseGap - spouseNode.width;
+  const rightScore = placementCollisionScore(rightX, spouseNode.y, spouseNode.width, spouseNode.height, anchor, occupiedNodes);
+  const leftScore = placementCollisionScore(leftX, spouseNode.y, spouseNode.width, spouseNode.height, anchor, occupiedNodes);
+  const nextX = chooseSpousePlacementX(anchor, leftX, rightX, leftScore, rightScore);
+
+  spouseNode.x = nextX;
+  spouseNode.cx = nextX + spouseNode.width / 2;
 }
 
 function buildSiblingNodes(
@@ -380,6 +396,70 @@ function createSpouseLink(key: string, leftCandidate: InternalDiagramNode, right
     kind: "spouse",
     path,
   };
+}
+
+function placementCollisionScore(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  anchor: InternalDiagramNode,
+  occupiedNodes: InternalDiagramNode[],
+): number {
+  return occupiedNodes.reduce((total, node) => {
+    if (node.person.id === anchor.person.id) {
+      return total;
+    }
+
+    return total + rectangleOverlapArea(x, y, width, height, node);
+  }, 0);
+}
+
+function chooseSpousePlacementX(
+  anchor: InternalDiagramNode,
+  leftX: number,
+  rightX: number,
+  leftScore: number,
+  rightScore: number,
+): number {
+  if (rightScore === 0) {
+    return rightX;
+  }
+
+  if (leftScore === 0) {
+    return leftX;
+  }
+
+  if (leftScore < rightScore) {
+    return leftX;
+  }
+
+  if (rightScore < leftScore) {
+    return rightX;
+  }
+
+  return anchor.role === "root" || anchor.role === "descendant" ? rightX : leftX;
+}
+
+function rectangleOverlapArea(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  node: InternalDiagramNode,
+): number {
+  const overlapWidth =
+    Math.min(x + width + spouseCollisionGap, node.x + node.width + spouseCollisionGap)
+    - Math.max(x - spouseCollisionGap, node.x - spouseCollisionGap);
+  const overlapHeight =
+    Math.min(y + height + spouseCollisionGap, node.y + node.height + spouseCollisionGap)
+    - Math.max(y - spouseCollisionGap, node.y - spouseCollisionGap);
+
+  if (overlapWidth <= 0 || overlapHeight <= 0) {
+    return 0;
+  }
+
+  return overlapWidth * overlapHeight;
 }
 
 function comparePersons(left: Person, right: Person): number {
