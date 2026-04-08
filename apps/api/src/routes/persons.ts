@@ -12,14 +12,12 @@ import {
 } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
 import { normalizeCreatePersonDto, normalizeUpdatePersonDto, toDbBoolean } from "../lib/normalize";
+import {
+  buildDuplicatePersonHttpError,
+  formatDuplicatePersonName,
+  isDuplicatePersonConstraintError,
+} from "../lib/person-duplicates";
 import type { Env } from "../types";
-
-type DuplicatePerson = {
-  id: string;
-  firstName: string;
-  lastName: string | null;
-  middleName: string | null;
-};
 
 export async function getPersons(env: Env, currentUser: SessionUser): Promise<Response> {
   const persons = await listPersons(env.DB, currentUser.id);
@@ -50,7 +48,7 @@ export async function checkDuplicatePerson(url: URL, env: Env): Promise<Response
     duplicate: duplicate
       ? {
           personId: duplicate.id,
-          personName: formatPersonName(duplicate),
+          personName: formatDuplicatePersonName(duplicate),
         }
       : null,
   };
@@ -105,7 +103,7 @@ export async function createPerson(request: Request, env: Env, currentUser: Sess
       {
         code: "person_duplicate",
         personId: duplicate.id,
-        personName: formatPersonName(duplicate),
+        personName: formatDuplicatePersonName(duplicate),
       },
     );
   }
@@ -113,45 +111,61 @@ export async function createPerson(request: Request, env: Env, currentUser: Sess
   const personId = crypto.randomUUID();
   const timestamp = new Date().toISOString();
 
-  await env.DB.prepare(
-    `
-      INSERT INTO global_persons (
-        id,
-        first_name,
-        last_name,
-        middle_name,
-        maiden_name,
-        gender,
-        birth_date,
-        death_date,
-        birth_place,
-        death_place,
-        biography,
-        is_living,
-        photo_url,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-  )
-    .bind(
-      personId,
-      input.firstName,
-      input.lastName,
-      input.middleName,
-      input.maidenName,
-      input.gender,
-      input.birthDate,
-      input.deathDate,
-      input.birthPlace,
-      input.deathPlace,
-      input.biography,
-      toDbBoolean(input.isLiving),
-      input.photoUrl,
-      timestamp,
-      timestamp,
+  try {
+    await env.DB.prepare(
+      `
+        INSERT INTO global_persons (
+          id,
+          first_name,
+          last_name,
+          middle_name,
+          maiden_name,
+          gender,
+          birth_date,
+          death_date,
+          birth_place,
+          death_place,
+          biography,
+          is_living,
+          photo_url,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
     )
-    .run();
+      .bind(
+        personId,
+        input.firstName,
+        input.lastName,
+        input.middleName,
+        input.maidenName,
+        input.gender,
+        input.birthDate,
+        input.deathDate,
+        input.birthPlace,
+        input.deathPlace,
+        input.biography,
+        toDbBoolean(input.isLiving),
+        input.photoUrl,
+        timestamp,
+        timestamp,
+      )
+      .run();
+  } catch (error) {
+    if (isDuplicatePersonConstraintError(error)) {
+      throw await buildDuplicatePersonHttpError(
+        env.DB,
+        {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          birthDate: input.birthDate,
+        },
+        "Неможливо створити людину: профіль з таким ім’ям, прізвищем і датою народження вже існує.",
+      );
+    }
+
+    throw error;
+  }
 
   await grantPersonPermission(env.DB, currentUser.id, personId, "owner");
 
@@ -198,7 +212,7 @@ export async function updatePerson(
       {
         code: "person_duplicate",
         personId: duplicate.id,
-        personName: formatPersonName(duplicate),
+          personName: formatDuplicatePersonName(duplicate),
       },
     );
   }
@@ -273,10 +287,27 @@ export async function updatePerson(
   updates.push("updated_at = ?");
   values.push(new Date().toISOString());
 
-  await env.DB
-    .prepare(`UPDATE global_persons SET ${updates.join(", ")} WHERE id = ?`)
-    .bind(...values, personId)
-    .run();
+  try {
+    await env.DB
+      .prepare(`UPDATE global_persons SET ${updates.join(", ")} WHERE id = ?`)
+      .bind(...values, personId)
+      .run();
+  } catch (error) {
+    if (isDuplicatePersonConstraintError(error)) {
+      throw await buildDuplicatePersonHttpError(
+        env.DB,
+        {
+          firstName: input.firstName ?? existing.firstName,
+          lastName: input.lastName ?? existing.lastName,
+          birthDate: input.birthDate ?? existing.birthDate,
+        },
+        "Неможливо зберегти зміни: профіль з таким ім’ям, прізвищем і датою народження вже існує.",
+        existing.id,
+      );
+    }
+
+    throw error;
+  }
 
   const person = await getPersonById(env.DB, currentUser.id, personId);
 
@@ -316,8 +347,4 @@ export async function deletePerson(env: Env, currentUser: SessionUser, personId:
   ]);
 
   return noContent();
-}
-
-function formatPersonName(person: DuplicatePerson): string {
-  return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
 }

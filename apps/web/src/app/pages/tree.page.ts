@@ -41,9 +41,9 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           <div class="share-card" *ngIf="shareLink() as shareLink">
             <div class="share-card-header">
               <div class="share-card-copy">
-                <strong>Публічне посилання на все дерево</strong>
+                <strong>Публічне посилання на мережу родини</strong>
                 <p class="muted">
-                  Надішліть його родичу. Він зможе переглянути все дерево і додати себе без реєстрації.
+                  Надішліть його родичу. Він зможе переглянути всю мережу родини і додати себе без реєстрації.
                 </p>
               </div>
 

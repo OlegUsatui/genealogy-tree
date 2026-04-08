@@ -12,7 +12,7 @@ import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { FamilySpacesService } from "../services/family-spaces.service";
-import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree-diagram";
+import { buildFamilyNetworkDiagram, type FamilyNetworkDiagram, type FamilyNetworkNode } from "./family-network-diagram";
 
 type LivingOption = "unknown" | "true" | "false";
 type PublicRelationKind = "parent" | "child" | "spouse";
@@ -28,7 +28,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
             <span class="family-banner-kicker">Сімейне посилання</span>
             <h1>{{ title }}</h1>
             <p class="muted">
-              Це read-only перегляд усього пов’язаного дерева. Якщо ви належите до цієї родини, можете
+              Це read-only перегляд усієї мережі родини. Якщо ви належите до цієї родини, можете
               додати себе без реєстрації.
             </p>
           </div>
@@ -48,10 +48,10 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         <section class="public-join-card" (click)="$event.stopPropagation()">
           <div class="public-join-header">
             <div>
-              <span class="public-join-kicker">Додати себе до дерева</span>
+              <span class="public-join-kicker">Додати себе до родини</span>
               <h2>Хто ви в цій родині</h2>
               <p class="muted">
-                Введіть свої дані. Якщо ви вже є в цьому дереві, оберіть себе зі списку. Якщо ні,
+                Введіть свої дані. Якщо ви вже є в цій мережі родини, оберіть себе зі списку. Якщо ні,
                 вкажіть, до кого саме ви додаєтесь.
               </p>
             </div>
@@ -103,9 +103,9 @@ type PublicRelationKind = "parent" | "child" | "spouse";
 
             <div class="selected-match" *ngIf="selectedExistingCandidate() as selected">
               <div class="selected-match-copy">
-                <span class="selected-match-eyebrow">Ми вже бачимо вас у цьому дереві</span>
+                <span class="selected-match-eyebrow">Ми вже бачимо вас у цій мережі родини</span>
                 <strong>{{ displayName(selected) }}</strong>
-                <span class="muted">Ми просто підсвітимо ваш профіль у дереві, без створення дубля.</span>
+                <span class="muted">Ми просто підсвітимо ваш профіль у схемі, без створення дубля.</span>
               </div>
 
               <button mat-stroked-button type="button" (click)="clearExistingSelection()">Це не я</button>
@@ -141,7 +141,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
               <div class="relation-panel">
                 <div class="match-panel-copy">
                   <h3>Як саме ви додаєтесь</h3>
-                  <p class="muted">Оберіть людину з дерева і вкажіть, ким ви для неї є.</p>
+                  <p class="muted">Оберіть людину з мережі родини і вкажіть, ким ви для неї є.</p>
                 </div>
 
                 <div class="field-grid">
@@ -155,7 +155,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
-                    <mat-label>Оберіть родича з дерева</mat-label>
+                    <mat-label>Оберіть родича з мережі</mat-label>
                     <input
                       matInput
                       formControlName="relatedToQuery"
@@ -240,10 +240,10 @@ type PublicRelationKind = "parent" | "child" | "spouse";
               <g
                 *ngFor="let node of diagram.nodes"
                 class="tree-node-group"
-                [class.root-node]="node.role === 'root'"
+                [class.root-node]="node.role === 'focus'"
                 [class.ancestor-node]="node.role === 'ancestor'"
                 [class.descendant-node]="node.role === 'descendant'"
-                [class.spouse-node]="node.role === 'spouse'"
+                [class.spouse-node]="node.role === 'same'"
                 [class.node-highlighted]="highlightedPersonId() === node.person.id"
                 [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
               >
@@ -299,7 +299,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
 
       <ng-template #emptyState>
         <section class="tree-page tree-page--empty">
-          <div class="empty-state tree-empty-state">Немає достатньо даних для побудови дерева.</div>
+          <div class="empty-state tree-empty-state">Немає достатньо даних для побудови мережі родини.</div>
         </section>
       </ng-template>
     </section>
@@ -769,7 +769,7 @@ export class FamilyPublicPageComponent {
   readonly isLoading = signal(false);
   readonly errorMessage = signal("");
   readonly family = signal<PublicFamilyTreeResponse | null>(null);
-  readonly diagram = signal<TreeDiagram | null>(null);
+  readonly diagram = signal<FamilyNetworkDiagram | null>(null);
   readonly familyTitle = signal("");
   readonly highlightedPersonId = signal<string | null>(null);
   readonly isJoinPanelOpen = signal(false);
@@ -827,7 +827,7 @@ export class FamilyPublicPageComponent {
       const token = params.get("token");
 
       if (!token) {
-        this.errorMessage.set("Посилання на сімейне дерево некоректне");
+        this.errorMessage.set("Посилання на мережу родини некоректне");
         return;
       }
 
@@ -882,17 +882,20 @@ export class FamilyPublicPageComponent {
     return `public-tree-node-photo-${personId}`;
   }
 
-  nodeRoleLabel(node: TreeDiagramNode): string {
-    switch (node.role) {
-      case "root":
-        return "ЦЕНТР";
-      case "ancestor":
-        return "ПРЕДОК";
-      case "descendant":
-        return "НАЩАДОК";
-      case "spouse":
-        return "ПАРТНЕР";
+  nodeRoleLabel(node: FamilyNetworkNode): string {
+    if (node.role === "focus") {
+      return "ЦЕНТР";
     }
+
+    if (node.role === "ancestor") {
+      return "ВИЩЕ";
+    }
+
+    if (node.role === "descendant") {
+      return "НИЖЧЕ";
+    }
+
+    return "ТЕ САМЕ ПОКОЛІННЯ";
   }
 
   candidateMeta(person: Person): string {
@@ -970,13 +973,13 @@ export class FamilyPublicPageComponent {
 
   selfMatchPanelTitle(): string {
     return this.selfMatches().some((candidate) => this.isExactSelfMatch(candidate))
-      ? "Схоже, ви вже є в цьому дереві"
+      ? "Схоже, ви вже є в цій мережі родини"
       : "Можливі збіги";
   }
 
   selfMatchPanelDescription(): string {
     return this.selfMatches().some((candidate) => this.isExactSelfMatch(candidate))
-      ? "Оберіть свій профіль зі списку, і ми просто підсвітимо вас у дереві."
+      ? "Оберіть свій профіль зі списку, і ми просто підсвітимо вас у схемі."
       : "Якщо бачите себе, оберіть профіль. Якщо ні, продовжуйте додавання як нова людина.";
   }
 
@@ -1030,7 +1033,7 @@ export class FamilyPublicPageComponent {
   }
 
   joinSubmitLabel(): string {
-    return this.selectedExistingCandidate() ? "Показати мене в дереві" : "Додати себе до дерева";
+    return this.selectedExistingCandidate() ? "Показати мене в мережі" : "Додати себе до родини";
   }
 
   async submitJoin(): Promise<void> {
@@ -1048,12 +1051,12 @@ export class FamilyPublicPageComponent {
     const exactMatchExists = this.selfMatches().some((candidate) => this.isExactSelfMatch(candidate));
 
     if (exactMatchExists && !this.selectedExistingCandidate()) {
-      this.joinErrorMessage.set("Ми вже бачимо вас у цьому дереві. Оберіть свій профіль зі списку, щоб не створювати дубль.");
+      this.joinErrorMessage.set("Ми вже бачимо вас у цій мережі родини. Оберіть свій профіль зі списку, щоб не створювати дубль.");
       return;
     }
 
     if (!this.selectedExistingCandidate() && !this.selectedRelatedPerson()) {
-      this.joinErrorMessage.set("Оберіть людину з дерева, до якої ви додаєтесь.");
+      this.joinErrorMessage.set("Оберіть людину з мережі родини, до якої ви додаєтесь.");
       return;
     }
 
@@ -1069,11 +1072,11 @@ export class FamilyPublicPageComponent {
       this.closeJoinPanel();
 
       if (response.alreadyInTree) {
-        this.snackBar.open("Ви вже є в цьому дереві. Показую ваш профіль у схемі.", "Закрити", { duration: 3000 });
+        this.snackBar.open("Ви вже є в цій мережі родини. Показую ваш профіль у схемі.", "Закрити", { duration: 3000 });
       } else if (response.usedExistingPerson) {
-        this.snackBar.open("Знайшли наявний профіль і під’єднали його до цього дерева.", "Закрити", { duration: 3200 });
+        this.snackBar.open("Знайшли наявний профіль і під’єднали його до цієї мережі родини.", "Закрити", { duration: 3200 });
       } else {
-        this.snackBar.open("Людину додано до дерева.", "Закрити", { duration: 3000 });
+        this.snackBar.open("Людину додано до мережі родини.", "Закрити", { duration: 3000 });
       }
     } catch (error) {
       const apiError = error as HttpErrorResponse;
@@ -1249,7 +1252,7 @@ export class FamilyPublicPageComponent {
 
     try {
       const family = await awaitOne<PublicFamilyTreeResponse>(this.familySpacesService.getPublicFamily(token));
-      const diagram = buildTreeDiagram(family.tree);
+      const diagram = buildFamilyNetworkDiagram(family.tree);
       this.family.set(family);
       this.familyTitle.set(family.title);
       this.diagram.set(diagram);
@@ -1326,7 +1329,7 @@ export class FamilyPublicPageComponent {
     };
   }
 
-  private fitDiagramToViewport(diagram: TreeDiagram): void {
+  private fitDiagramToViewport(diagram: FamilyNetworkDiagram): void {
     const viewport = this.viewportRef?.nativeElement;
 
     if (!viewport || diagram.width <= 0 || diagram.height <= 0) {
@@ -1345,7 +1348,7 @@ export class FamilyPublicPageComponent {
     this.panY.set((viewport.clientHeight - diagram.height * fitZoom) / 2);
   }
 
-  private centerPerson(diagram: TreeDiagram, personId: string): void {
+  private centerPerson(diagram: FamilyNetworkDiagram, personId: string): void {
     const viewport = this.viewportRef?.nativeElement;
     const node = diagram.nodes.find((candidate) => candidate.person.id === personId);
 

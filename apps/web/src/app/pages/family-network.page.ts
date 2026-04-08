@@ -45,6 +45,12 @@ type NetworkDiagram = {
   viewBox: string;
 };
 
+type NodeActionMenuState = {
+  personId: string;
+  left: number;
+  top: number;
+};
+
 @Component({
   standalone: true,
   imports: [CommonModule, RouterLink, ...MATERIAL_IMPORTS],
@@ -78,6 +84,32 @@ type NetworkDiagram = {
       </mat-card>
 
       <mat-card class="section-card network-card" *ngIf="nodes().length > 0; else emptyState">
+        <div class="node-action-backdrop" *ngIf="nodeActionMenu()" (click)="closeNodeActionMenu()"></div>
+        <div
+          class="node-action-menu"
+          *ngIf="nodeActionMenu() as menu"
+          [style.left.px]="menu.left"
+          [style.top.px]="menu.top"
+          (click)="$event.stopPropagation()"
+        >
+          <button mat-flat-button color="primary" type="button" (click)="openPerson(menu.personId)">
+            Профіль
+          </button>
+          <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
+            Родовід
+          </button>
+          <div class="node-action-divider"></div>
+          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'parents')">
+            Додати батька / матір
+          </button>
+          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'children')">
+            Додати дитину
+          </button>
+          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'spouses')">
+            Додати партнера / партнерку
+          </button>
+        </div>
+
         <div
           #viewport
           class="network-canvas"
@@ -118,8 +150,10 @@ type NetworkDiagram = {
               [class.ancestor-node]="node.role === 'ancestor'"
               [class.descendant-node]="node.role === 'descendant'"
               [class.same-level-node]="node.role === 'same'"
+              [class.node-action-open]="nodeActionMenu()?.personId === node.person.id"
               [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
               (click)="openPerson(node.person.id)"
+              (contextmenu)="openNodeActionMenu(node.person.id, $event)"
             >
               <rect
                 class="network-node-card"
@@ -234,7 +268,36 @@ type NetworkDiagram = {
       }
 
       .network-card {
+        position: relative;
         overflow: hidden;
+      }
+
+      .node-action-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 4;
+      }
+
+      .node-action-menu {
+        position: fixed;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 232px;
+        padding: 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
+        box-shadow: 0 18px 40px rgba(31, 53, 79, 0.18);
+      }
+
+      .node-action-divider {
+        height: 1px;
+        margin: 2px 0;
+        background: rgba(127, 160, 200, 0.18);
       }
 
       .network-canvas {
@@ -295,6 +358,7 @@ type NetworkDiagram = {
         transition: transform 0.18s ease, stroke 0.18s ease;
       }
 
+      .network-node-group.node-action-open .network-node-card,
       .network-node-group:hover .network-node-card {
         stroke: rgba(31, 103, 198, 0.42);
       }
@@ -383,6 +447,7 @@ export class FamilyNetworkPageComponent {
   readonly viewBox = signal("0 0 1200 900");
   readonly diagramWidth = signal(1200);
   readonly diagramHeight = signal(900);
+  readonly nodeActionMenu = signal<NodeActionMenuState | null>(null);
   readonly zoom = signal(1);
   readonly panX = signal(0);
   readonly panY = signal(0);
@@ -477,7 +542,64 @@ export class FamilyNetworkPageComponent {
       return;
     }
 
+    this.closeNodeActionMenu();
     await this.router.navigate(["/persons", personId]);
+  }
+
+  async openPersonTree(personId: string): Promise<void> {
+    this.closeNodeActionMenu();
+    await this.router.navigate(["/tree", personId]);
+  }
+
+  async openCreateRelative(personId: string, group: "parents" | "children" | "spouses"): Promise<void> {
+    this.closeNodeActionMenu();
+    await this.router.navigate(["/persons/new"], {
+      queryParams: {
+        relatedTo: personId,
+        group,
+        returnGraphPersonId: this.focusPersonId(),
+      },
+    });
+  }
+
+  openNodeActionMenu(personId: string, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (this.suppressNodeClick) {
+      return;
+    }
+
+    const currentTarget = event.currentTarget;
+
+    if (!(currentTarget instanceof SVGGraphicsElement)) {
+      return;
+    }
+
+    const rect = currentTarget.getBoundingClientRect();
+    const menuWidth = 232;
+    const menuHeight = 272;
+    const viewportMargin = 16;
+    const preferredLeft = rect.right + 12;
+    const fallbackLeft = rect.left - menuWidth - 12;
+    const left = preferredLeft + menuWidth + viewportMargin <= window.innerWidth
+      ? preferredLeft
+      : Math.max(viewportMargin, fallbackLeft);
+    const top = clamp(
+      rect.top + rect.height / 2 - menuHeight / 2,
+      viewportMargin,
+      window.innerHeight - menuHeight - viewportMargin,
+    );
+
+    this.nodeActionMenu.set({
+      personId,
+      left,
+      top,
+    });
+  }
+
+  closeNodeActionMenu(): void {
+    this.nodeActionMenu.set(null);
   }
 
   handleWheel(event: WheelEvent): void {
@@ -493,6 +615,7 @@ export class FamilyNetworkPageComponent {
   }
 
   startPan(event: PointerEvent): void {
+    this.closeNodeActionMenu();
     const viewport = event.currentTarget;
 
     if (!(viewport instanceof HTMLElement)) {
@@ -610,6 +733,7 @@ export class FamilyNetworkPageComponent {
   }
 
   private async loadGraph(personId: string): Promise<void> {
+    this.closeNodeActionMenu();
     this.isLoading.set(true);
     this.errorMessage.set("");
 

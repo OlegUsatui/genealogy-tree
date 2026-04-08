@@ -541,6 +541,7 @@ export class PersonFormPageComponent {
   readonly relationContextPerson = signal<Person | null>(null);
   readonly relationContextGroup = signal<NewRelativeGroup | null>(null);
   readonly returnTreePersonId = signal<string | null>(null);
+  readonly returnGraphPersonId = signal<string | null>(null);
 
   readonly form = new FormGroup({
     firstName: new FormControl("", {
@@ -598,6 +599,7 @@ export class PersonFormPageComponent {
         this.relationContextPerson.set(null);
         this.relationContextGroup.set(null);
         this.returnTreePersonId.set(null);
+        this.returnGraphPersonId.set(null);
       } else {
         this.form.reset({
           firstName: "",
@@ -630,9 +632,11 @@ export class PersonFormPageComponent {
       const relatedTo = params.get("relatedTo");
       const group = parseNewRelativeGroup(params.get("group"));
       const returnTreePersonId = params.get("returnTreePersonId");
+      const returnGraphPersonId = params.get("returnGraphPersonId");
 
       this.relationContextGroup.set(group);
       this.returnTreePersonId.set(returnTreePersonId);
+      this.returnGraphPersonId.set(returnGraphPersonId);
 
       if (relatedTo && group) {
         void this.loadRelationContextPerson(relatedTo);
@@ -721,6 +725,10 @@ export class PersonFormPageComponent {
   }
 
   backButtonLabel(): string {
+    if (this.returnGraphPersonId()) {
+      return "Назад до мережі родини";
+    }
+
     if (this.returnTreePersonId()) {
       return "Назад до дерева";
     }
@@ -767,6 +775,11 @@ export class PersonFormPageComponent {
   }
 
   async navigateBackFromForm(): Promise<void> {
+    if (this.returnGraphPersonId()) {
+      await this.router.navigate(["/graph", this.returnGraphPersonId()]);
+      return;
+    }
+
     if (this.returnTreePersonId()) {
       await this.router.navigate(["/tree", this.returnTreePersonId()]);
       return;
@@ -927,6 +940,11 @@ export class PersonFormPageComponent {
   }
 
   private async navigateAfterContextCreate(): Promise<void> {
+    if (this.returnGraphPersonId()) {
+      await this.router.navigate(["/graph", this.returnGraphPersonId()]);
+      return;
+    }
+
     if (this.returnTreePersonId()) {
       await this.router.navigate(["/tree", this.returnTreePersonId()]);
       return;

@@ -20,6 +20,11 @@ import {
 } from "../lib/db";
 import { HttpError, json, readJson } from "../lib/http";
 import { normalizeCreatePersonDto, toDbBoolean } from "../lib/normalize";
+import {
+  buildDuplicatePersonHttpError,
+  formatDuplicatePersonName,
+  isDuplicatePersonConstraintError,
+} from "../lib/person-duplicates";
 import type { DbNullable, Env } from "../types";
 
 type FamilySpaceRow = {
@@ -288,7 +293,7 @@ export async function addSelfToPublicFamily(
       {
         code: "person_already_in_family",
         personId: duplicate.id,
-        personName: formatPersonName(duplicate),
+        personName: formatDuplicatePersonName(duplicate),
       },
     );
   }
@@ -297,42 +302,58 @@ export async function addSelfToPublicFamily(
   const timestamp = new Date().toISOString();
 
   if (!duplicate) {
-    await env.DB
-      .prepare(
-        `
-          INSERT INTO global_persons (
-            id,
-            first_name,
-            last_name,
-            middle_name,
-            maiden_name,
-            gender,
-            birth_date,
-            death_date,
-            birth_place,
-            death_place,
-            biography,
-            is_living,
-            photo_url,
-            created_at,
-            updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, NULL, ?, ?)
-        `,
-      )
-      .bind(
-        personId,
-        personInput.firstName,
-        personInput.lastName,
-        personInput.middleName,
-        personInput.maidenName,
-        personInput.gender,
-        personInput.birthDate,
-        personInput.birthPlace,
-        toDbBoolean(personInput.isLiving),
-        timestamp,
-        timestamp,
-      )
-      .run();
+    try {
+      await env.DB
+        .prepare(
+          `
+            INSERT INTO global_persons (
+              id,
+              first_name,
+              last_name,
+              middle_name,
+              maiden_name,
+              gender,
+              birth_date,
+              death_date,
+              birth_place,
+              death_place,
+              biography,
+              is_living,
+              photo_url,
+              created_at,
+              updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, NULL, ?, ?)
+          `,
+        )
+        .bind(
+          personId,
+          personInput.firstName,
+          personInput.lastName,
+          personInput.middleName,
+          personInput.maidenName,
+          personInput.gender,
+          personInput.birthDate,
+          personInput.birthPlace,
+          toDbBoolean(personInput.isLiving),
+          timestamp,
+          timestamp,
+        )
+        .run();
+    } catch (error) {
+      if (isDuplicatePersonConstraintError(error)) {
+        throw await buildDuplicatePersonHttpError(
+          env.DB,
+          {
+            firstName: personInput.firstName,
+            lastName: personInput.lastName,
+            birthDate: personInput.birthDate,
+          },
+          "Така людина вже є в базі. Оберіть її зі списку вище замість створення дубля.",
+        );
+      }
+
+      throw error;
+    }
   }
 
   if (personId === relatedToPersonId) {
@@ -582,8 +603,4 @@ function createPlaceholders(count: number): string {
   }
 
   return Array.from({ length: count }, () => "?").join(", ");
-}
-
-function formatPersonName(person: { firstName: string; middleName: string | null; lastName: string | null }): string {
-  return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
 }
