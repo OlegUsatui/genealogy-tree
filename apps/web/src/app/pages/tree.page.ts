@@ -132,6 +132,7 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
                 [class.root-node]="node.role === 'root'"
                 [class.ancestor-node]="node.role === 'ancestor'"
                 [class.descendant-node]="node.role === 'descendant'"
+                [class.sibling-node]="node.role === 'sibling'"
                 [class.spouse-node]="node.role === 'spouse'"
                 [class.node-action-open]="nodeActionMenu()?.personId === node.person.id"
                 [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
@@ -466,6 +467,10 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         fill: rgba(234, 244, 255, 0.98);
       }
 
+      .sibling-node .tree-node-card {
+        fill: rgba(236, 244, 255, 0.98);
+      }
+
       .spouse-node .tree-node-card {
         fill: rgba(230, 240, 255, 0.98);
       }
@@ -642,6 +647,8 @@ export class TreePageComponent {
         return "ПРЕДОК";
       case "descendant":
         return "НАЩАДОК";
+      case "sibling":
+        return "БРАТ / СЕСТРА";
       case "spouse":
         return "ПАРТНЕР";
     }

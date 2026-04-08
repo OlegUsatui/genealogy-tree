@@ -39,7 +39,7 @@ export interface TreeDiagramNode {
   y: number;
   width: number;
   height: number;
-  role: "root" | "ancestor" | "descendant" | "spouse";
+  role: "root" | "ancestor" | "descendant" | "sibling" | "spouse";
 }
 
 export interface TreeDiagramLink {
@@ -134,6 +134,8 @@ export function buildTreeDiagram(tree: TreeResponse): TreeDiagram {
       links.push(createBranchLink(`branch-anc-${link.source.data.id}-${link.target.data.id}`, source, target));
     }
   }
+
+  buildSiblingNodes(rootPerson.id, parentsByChild, childrenByParent, personMap, primaryNodes, links);
 
   const spouseNodes = buildSpouseNodes(spouseRelationships, personMap, primaryNodes, links);
   const allNodes = [...primaryNodes.values(), ...spouseNodes];
@@ -287,6 +289,55 @@ function buildSpouseNodes(
   }
 
   return spouseNodes;
+}
+
+function buildSiblingNodes(
+  rootPersonId: string,
+  parentsByChild: Map<string, string[]>,
+  childrenByParent: Map<string, string[]>,
+  personMap: Map<string, Person>,
+  primaryNodes: Map<string, InternalDiagramNode>,
+  links: TreeDiagramLink[],
+): void {
+  const rootNode = primaryNodes.get(rootPersonId);
+  const rootParentIds = parentsByChild.get(rootPersonId) ?? [];
+
+  if (!rootNode || rootParentIds.length === 0) {
+    return;
+  }
+
+  const siblingIds = [...new Set(
+    rootParentIds.flatMap((parentId) => childrenByParent.get(parentId) ?? []),
+  )]
+    .filter((personId) => personId !== rootPersonId && personMap.has(personId))
+    .sort((left, right) => comparePersons(personMap.get(left)!, personMap.get(right)!));
+
+  if (siblingIds.length === 0) {
+    return;
+  }
+
+  siblingIds.forEach((siblingId, index) => {
+    const siblingPerson = personMap.get(siblingId);
+
+    if (!siblingPerson) {
+      return;
+    }
+
+    const cx = rootNode.cx - (nodeWidth + siblingGap) * (siblingIds.length - index);
+    const siblingNode = createDiagramNode(cx, rootNode.cy, siblingPerson, "sibling");
+    siblingNode.key = `sibling-${siblingId}`;
+    primaryNodes.set(siblingId, siblingNode);
+
+    for (const parentId of rootParentIds) {
+      const parentNode = primaryNodes.get(parentId);
+
+      if (!parentNode) {
+        continue;
+      }
+
+      links.push(createBranchLink(`branch-sibling-${parentId}-${siblingId}`, parentNode, siblingNode));
+    }
+  });
 }
 
 function createBranchLink(key: string, source: InternalDiagramNode, target: InternalDiagramNode): TreeDiagramLink {

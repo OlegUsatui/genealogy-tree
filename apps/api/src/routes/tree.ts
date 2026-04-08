@@ -26,6 +26,7 @@ export async function getTree(
   const downDepth = clampDepth(url.searchParams.get("down"));
   const personIds = new Set<string>([personId]);
   const relationshipMap = new Map<string, TreeResponse["relationships"][number]>();
+  const rootParentIds = new Set<string>();
 
   let currentAncestorIds = [personId];
 
@@ -38,9 +39,23 @@ export async function getTree(
       personIds.add(relationship.person1Id);
       personIds.add(relationship.person2Id);
       nextAncestorIds.add(relationship.person1Id);
+
+      if (level === 0) {
+        rootParentIds.add(relationship.person1Id);
+      }
     }
 
     currentAncestorIds = [...nextAncestorIds];
+  }
+
+  if (rootParentIds.size > 0) {
+    const siblingRelationships = await getChildRelationshipsForParents(env.DB, currentUser.id, [...rootParentIds]);
+
+    for (const relationship of siblingRelationships) {
+      relationshipMap.set(relationship.id, relationship);
+      personIds.add(relationship.person1Id);
+      personIds.add(relationship.person2Id);
+    }
   }
 
   let currentDescendantIds = [personId];
