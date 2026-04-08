@@ -47,7 +47,7 @@ export default {
       const url = new URL(request.url);
       const pathname = url.pathname.replace(/\/+$/, "") || "/";
 
-      if (!env.SESSION_SECRET) {
+      if (requiresSessionSecret(pathname) && !env.SESSION_SECRET) {
         throw new HttpError(500, "SESSION_SECRET не налаштований");
       }
 
@@ -211,6 +211,15 @@ async function routeRequest(
 
 function requiresAuth(pathname: string): boolean {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function requiresSessionSecret(pathname: string): boolean {
+  return (
+    requiresAuth(pathname) ||
+    pathname === "/api/auth/login" ||
+    pathname === "/api/auth/logout" ||
+    pathname === "/api/auth/me"
+  );
 }
 
 function requireAuthenticatedUser(user: SessionUser | null): SessionUser {
