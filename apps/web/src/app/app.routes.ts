@@ -2,6 +2,7 @@ import { Routes } from "@angular/router";
 
 import { authGuard } from "./guards/auth.guard";
 import { loginGuard } from "./guards/login.guard";
+import { FamilyPublicPageComponent } from "./pages/family-public.page";
 import { LoginPageComponent } from "./pages/login.page";
 import { PersonDetailsPageComponent } from "./pages/person-details.page";
 import { PersonFormPageComponent } from "./pages/person-form.page";
@@ -10,6 +11,10 @@ import { TreePageComponent } from "./pages/tree.page";
 import { UserCreatePageComponent } from "./pages/user-create.page";
 
 export const routes: Routes = [
+  {
+    path: "f/:token",
+    component: FamilyPublicPageComponent,
+  },
   {
     path: "",
     component: TreePageComponent,

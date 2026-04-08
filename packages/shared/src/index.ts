@@ -121,6 +121,38 @@ export interface DuplicatePersonCheckResponse {
   duplicate: DuplicatePersonMatch | null;
 }
 
+export interface FamilyShareLinkResponse {
+  familySpaceId: string;
+  title: string;
+  rootPersonId: string;
+  token: string;
+  shareUrl: string;
+}
+
+export interface PublicFamilyTreeResponse {
+  familySpaceId: string;
+  title: string;
+  rootPersonId: string;
+  token: string;
+  tree: TreeResponse;
+}
+
+export type PublicSelfRelationshipKind = "parent" | "child" | "spouse";
+
+export interface PublicSelfAddDto {
+  existingPersonId?: string | null;
+  relatedToPersonId?: string | null;
+  relationKind?: PublicSelfRelationshipKind | null;
+  person?: CreatePersonDto | null;
+}
+
+export interface PublicSelfAddResponse {
+  person: Person;
+  relationship: Relationship | null;
+  usedExistingPerson: boolean;
+  alreadyInTree: boolean;
+}
+
 export interface CreateUserDto {
   email: string;
   password: string;

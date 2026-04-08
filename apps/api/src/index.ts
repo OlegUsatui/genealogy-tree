@@ -1,6 +1,7 @@
 import type { SessionUser } from "@family-tree/shared";
 
 import { deleteAccount } from "./routes/account";
+import { addSelfToPublicFamily, createFamilyShare, getPublicFamilyTree } from "./routes/family-spaces";
 import {
   checkDuplicatePerson,
   createPerson,
@@ -30,6 +31,7 @@ const protectedPrefixes = [
   "/api/account",
   "/api/persons",
   "/api/directory",
+  "/api/family-spaces",
   "/api/relationships",
   "/api/tree",
   "/api/search",
@@ -74,6 +76,18 @@ async function routeRequest(
     return json({ ok: true });
   }
 
+  const publicFamilyMatch = pathname.match(/^\/api\/public\/f\/([^/]+)$/);
+
+  if (publicFamilyMatch && request.method === "GET") {
+    return getPublicFamilyTree(env, decodeURIComponent(publicFamilyMatch[1]));
+  }
+
+  const publicFamilySelfMatch = pathname.match(/^\/api\/public\/f\/([^/]+)\/self$/);
+
+  if (publicFamilySelfMatch && request.method === "POST") {
+    return addSelfToPublicFamily(request, env, decodeURIComponent(publicFamilySelfMatch[1]));
+  }
+
   if (request.method === "POST" && pathname === "/api/auth/login") {
     return login(request, env);
   }
@@ -92,6 +106,10 @@ async function routeRequest(
 
   if (request.method === "POST" && pathname === "/api/users") {
     return createUser(request, env);
+  }
+
+  if (request.method === "POST" && pathname === "/api/family-spaces") {
+    return createFamilyShare(request, env, requireAuthenticatedUser(currentUser));
   }
 
   if (request.method === "GET" && pathname === "/api/signup/persons") {

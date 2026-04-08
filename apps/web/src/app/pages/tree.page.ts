@@ -1,15 +1,17 @@
-import type { Person, TreeResponse } from "@family-tree/shared";
+import type { FamilyShareLinkResponse, Person, TreeResponse } from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router } from "@angular/router";
+import { MatSnackBar } from "@angular/material/snack-bar";
 
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
+import { FamilySpacesService } from "../services/family-spaces.service";
 import { PersonsService } from "../services/persons.service";
 import { TreeService } from "../services/tree.service";
 import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree-diagram";
@@ -20,7 +22,39 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
   template: `
     <ng-container *ngIf="diagram() as diagram; else emptyState">
       <section class="tree-page">
-        <div class="tree-hud" *ngIf="isLoading() || errorMessage()">
+        <div class="tree-hud" *ngIf="isLoading() || errorMessage() || rootPersonId()">
+          <div class="tree-hud-actions" *ngIf="rootPersonId()">
+            <button
+              mat-flat-button
+              color="primary"
+              type="button"
+              [disabled]="isGeneratingShareLink()"
+              (click)="generateShareLink()"
+            >
+              {{ isGeneratingShareLink() ? "Створюю посилання..." : "Поділитися сім’єю" }}
+            </button>
+          </div>
+
+          <div class="share-card" *ngIf="shareLink() as shareLink">
+            <div class="share-card-header">
+              <div class="share-card-copy">
+                <strong>Публічне посилання на все дерево</strong>
+                <p class="muted">
+                  Надішліть його родичу. Він зможе переглянути все дерево і додати себе без реєстрації.
+                </p>
+              </div>
+
+              <button type="button" class="share-card-close" aria-label="Закрити посилання" (click)="closeShareLink()">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <div class="share-card-row">
+              <input class="share-link-input" [value]="shareLink" readonly (focus)="$any($event.target).select()">
+              <button mat-stroked-button type="button" (click)="copyShareLink()">Копіювати</button>
+            </div>
+          </div>
+
           <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
           <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
         </div>
@@ -185,6 +219,95 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         flex-direction: column;
         gap: 10px;
         pointer-events: none;
+      }
+
+      .tree-hud > * {
+        pointer-events: auto;
+      }
+
+      .tree-hud-actions {
+        display: flex;
+        justify-content: flex-start;
+      }
+
+      .share-card {
+        align-self: flex-start;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: min(560px, 100%);
+        padding: 16px 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
+        box-shadow: 0 18px 40px rgba(31, 53, 79, 0.12);
+      }
+
+      .share-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .share-card-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(96, 114, 123, 0.16);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--text);
+        cursor: pointer;
+        transition:
+          border-color 120ms ease,
+          background-color 120ms ease,
+          transform 120ms ease;
+      }
+
+      .share-card-close:hover {
+        border-color: rgba(53, 95, 83, 0.28);
+        background: rgba(255, 255, 255, 0.98);
+        transform: translateY(-1px);
+      }
+
+      .share-card-close span {
+        display: block;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .share-card-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .share-card-copy p {
+        margin: 0;
+      }
+
+      .share-card-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      .share-link-input {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(96, 114, 123, 0.16);
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--text);
+        font: inherit;
       }
 
       .node-action-backdrop {
@@ -386,6 +509,15 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           right: 14px;
         }
 
+        .share-card-row {
+          grid-template-columns: 1fr;
+        }
+
+        .share-card-header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
         .diagram-scroll::before {
           background-size: auto calc(100% - 16px);
         }
@@ -403,6 +535,8 @@ export class TreePageComponent {
   private readonly treeService = inject(TreeService);
   private readonly personsService = inject(PersonsService);
   private readonly authService = inject(AuthService);
+  private readonly familySpacesService = inject(FamilySpacesService);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly errorMessage = signal("");
   readonly isLoading = signal(false);
@@ -415,6 +549,8 @@ export class TreePageComponent {
   readonly panX = signal(0);
   readonly panY = signal(0);
   readonly nodeActionMenu = signal<NodeActionMenuState | null>(null);
+  readonly shareLink = signal("");
+  readonly isGeneratingShareLink = signal(false);
   readonly minZoom = 0.04;
   readonly maxZoom = 10;
 
@@ -567,6 +703,50 @@ export class TreePageComponent {
         returnTreePersonId: this.rootPersonId(),
       },
     });
+  }
+
+  async generateShareLink(): Promise<void> {
+    const rootPersonId = this.rootPersonId();
+
+    if (!rootPersonId) {
+      return;
+    }
+
+    this.isGeneratingShareLink.set(true);
+
+    try {
+      const response = await awaitOne<FamilyShareLinkResponse>(this.familySpacesService.createShare(rootPersonId));
+      this.shareLink.set(response.shareUrl);
+      await copyTextToClipboard(response.shareUrl);
+      this.snackBar.open("Посилання на сім’ю створено і скопійовано.", "Закрити", {
+        duration: 3200,
+      });
+    } catch (error) {
+      this.snackBar.open(readApiError(error), "Закрити", {
+        duration: 3200,
+      });
+    } finally {
+      this.isGeneratingShareLink.set(false);
+    }
+  }
+
+  async copyShareLink(): Promise<void> {
+    const shareLink = this.shareLink();
+
+    if (!shareLink) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(shareLink);
+      this.snackBar.open("Посилання скопійовано.", "Закрити", { duration: 2400 });
+    } catch {
+      this.snackBar.open("Не вдалося скопіювати посилання.", "Закрити", { duration: 2400 });
+    }
+  }
+
+  closeShareLink(): void {
+    this.shareLink.set("");
   }
 
   handleWheel(event: WheelEvent): void {
@@ -959,4 +1139,13 @@ function readApiError(error: unknown): string {
   }
 
   return "Помилка запиту";
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  throw new Error("Clipboard API is not available");
 }
