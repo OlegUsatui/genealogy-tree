@@ -1,7 +1,7 @@
 import type { FamilyGraphResponse, Person, Relationship, TreeResponse } from "@family-tree/shared";
 
 const nodeWidth = 214;
-const nodeHeight = 162;
+const nodeHeight = 186;
 const horizontalGap = 286;
 const levelGap = 236;
 const diagramPadding = 144;

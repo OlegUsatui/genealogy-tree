@@ -273,7 +273,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
                     {{ photoInitials(node.person) }}
                   </text>
                 </ng-template>
-                <text class="tree-node-title" [attr.x]="node.width / 2" y="106" text-anchor="middle">
+                <text class="tree-node-title" [attr.x]="node.width / 2" y="102" text-anchor="middle">
                   <tspan
                     *ngFor="let line of titleLines(node.person); let index = index"
                     [attr.x]="node.width / 2"
@@ -282,7 +282,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
                     {{ line }}
                   </tspan>
                 </text>
-                <text class="tree-node-meta" [attr.x]="node.width / 2" y="138" text-anchor="middle">
+                <text class="tree-node-meta" [attr.x]="node.width / 2" y="156" text-anchor="middle">
                   <tspan
                     *ngFor="let line of metaLines(node.person); let index = index"
                     [attr.x]="node.width / 2"
@@ -781,7 +781,7 @@ export class FamilyPublicPageComponent {
   readonly panX = signal(0);
   readonly panY = signal(0);
   readonly isPanning = signal(false);
-  readonly minZoom = 0.04;
+  readonly minZoom = 0.4;
   readonly maxZoom = 10;
 
   readonly joinForm = new FormGroup({
@@ -859,7 +859,7 @@ export class FamilyPublicPageComponent {
   }
 
   titleLines(person: Person): string[] {
-    return wrapNodeTitle(this.displayName(person), 16);
+    return wrapNodeTitle(this.displayName(person), 16, 3);
   }
 
   metaLines(person: Person): string[] {
@@ -1384,46 +1384,46 @@ function truncate(value: string, limit: number): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
-function wrapNodeTitle(value: string, limit = 18): string[] {
+function wrapNodeTitle(value: string, limit = 18, maxLines = 2): string[] {
   const words = value.trim().split(/\s+/).filter(Boolean);
 
   if (words.length === 0) {
     return ["Без імені"];
   }
 
-  let index = 0;
-  let firstLine = "";
+  const lines: string[] = [];
+  let currentLine = "";
 
-  while (index < words.length) {
-    const word = words[index];
+  for (const rawWord of words) {
+    const word = fitWord(rawWord, limit);
 
-    if (firstLine.length === 0) {
-      if (word.length > limit) {
-        firstLine = fitWord(word, limit);
-        index += 1;
-        break;
-      }
-
-      firstLine = word;
-      index += 1;
+    if (!currentLine) {
+      currentLine = word;
       continue;
     }
 
-    const candidate = `${firstLine} ${word}`;
+    const candidate = `${currentLine} ${word}`;
 
     if (candidate.length > limit) {
-      break;
+      lines.push(currentLine);
+      currentLine = word;
+      continue;
     }
 
-    firstLine = candidate;
-    index += 1;
+    currentLine = candidate;
   }
 
-  if (index >= words.length) {
-    return [firstLine];
+  if (currentLine) {
+    lines.push(currentLine);
   }
 
-  return [firstLine, truncate(words.slice(index).join(" "), limit)];
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+
+  const visibleLines = lines.slice(0, maxLines);
+  visibleLines[maxLines - 1] = truncate(lines.slice(maxLines - 1).join(" "), limit);
+  return visibleLines;
 }
 
 function wrapNodeMeta(values: Array<string | null>, limit = 24): string[] {

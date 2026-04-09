@@ -12,7 +12,7 @@ import { awaitOne } from "../services/await-one";
 import { GraphService } from "../services/graph.service";
 
 const nodeWidth = 214;
-const nodeHeight = 162;
+const nodeHeight = 186;
 const horizontalGap = 286;
 const levelGap = 236;
 const diagramPadding = 144;
@@ -55,7 +55,7 @@ type NodeActionMenuState = {
   standalone: true,
   imports: [CommonModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
-    <section class="app-page page-stack">
+    <section class="app-page page-stack network-page-shell">
       <mat-card class="section-card shell-card">
         <div class="page-header">
           <div class="page-copy">
@@ -192,7 +192,7 @@ type NodeActionMenuState = {
                 </text>
               </ng-template>
 
-              <text class="network-node-title" [attr.x]="node.width / 2" y="106" text-anchor="middle">
+              <text class="network-node-title" [attr.x]="node.width / 2" y="102" text-anchor="middle">
                 <tspan
                   *ngFor="let line of titleLines(node.person); let index = index"
                   [attr.x]="node.width / 2"
@@ -202,7 +202,7 @@ type NodeActionMenuState = {
                 </tspan>
               </text>
 
-              <text class="network-node-meta" [attr.x]="node.width / 2" y="138" text-anchor="middle">
+              <text class="network-node-meta" [attr.x]="node.width / 2" y="156" text-anchor="middle">
                 <tspan
                   *ngFor="let line of metaLines(node.person); let index = index"
                   [attr.x]="node.width / 2"
@@ -233,6 +233,11 @@ type NodeActionMenuState = {
         display: flex;
         flex-direction: column;
         gap: 16px;
+      }
+
+      .network-page-shell {
+        width: 100%;
+        max-width: none;
       }
 
       .section-card {
@@ -452,7 +457,7 @@ export class FamilyNetworkPageComponent {
   readonly panX = signal(0);
   readonly panY = signal(0);
   readonly isPanning = signal(false);
-  readonly minZoom = 0.04;
+  readonly minZoom = 0.4;
   readonly maxZoom = 10;
 
   private panState: {
@@ -488,7 +493,7 @@ export class FamilyNetworkPageComponent {
   }
 
   titleLines(person: Person): string[] {
-    return wrapLabel([person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ") || "Без імені", 16);
+    return wrapLabel([person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ") || "Без імені", 16, 3);
   }
 
   sceneTransform(): string {
@@ -506,7 +511,7 @@ export class FamilyNetworkPageComponent {
       return ["Дані ще не додані"];
     }
 
-    return wrapLabel(values.join(" • "), 24);
+    return wrapLabel(values.join(" • "), 24, 2);
   }
 
   renderablePhotoUrl(person: Person): string | null {
@@ -1220,7 +1225,7 @@ function createSpousePath(first: NetworkNode, second: NetworkNode): string {
   return `M ${sourceX} ${sourceY} C ${controlX} ${sourceY}, ${controlX} ${targetY}, ${targetX} ${targetY}`;
 }
 
-function wrapLabel(value: string, limit: number): string[] {
+function wrapLabel(value: string, limit: number, maxLines = 2): string[] {
   const words = value.trim().split(/\s+/).filter(Boolean);
 
   if (words.length === 0) {
@@ -1245,7 +1250,17 @@ function wrapLabel(value: string, limit: number): string[] {
     lines.push(currentLine);
   }
 
-  return lines.slice(0, 2);
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+
+  const visibleLines = lines.slice(0, maxLines);
+  visibleLines[maxLines - 1] = truncate(visibleLines[maxLines - 1], limit - 1);
+  return visibleLines;
+}
+
+function truncate(value: string, limit: number): string {
+  return value.length > limit ? `${value.slice(0, Math.max(1, limit - 1))}…` : value;
 }
 
 function comparePersons(left: Person, right: Person): number {

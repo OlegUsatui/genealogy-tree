@@ -564,7 +564,7 @@ export class TreePageComponent {
   readonly nodeActionMenu = signal<NodeActionMenuState | null>(null);
   readonly shareLink = signal("");
   readonly isGeneratingShareLink = signal(false);
-  readonly minZoom = 0.04;
+  readonly minZoom = 0.4;
   readonly maxZoom = 10;
 
   private panState: {
