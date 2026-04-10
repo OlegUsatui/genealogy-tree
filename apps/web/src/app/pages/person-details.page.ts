@@ -67,188 +67,145 @@ import { RelationshipsService } from "../services/relationships.service";
           </div>
         </mat-card>
 
-        <mat-card class="quick-add-card">
-          <div class="section-heading">
-            <div>
-              <h2>Швидко додати нового родича</h2>
-              <p class="muted">
-                Якщо цієї людини ще немає в базі, починай звідси: ми одразу створимо профіль і правильно прив’яжемо
-                його до {{ displayName(person) }}.
-              </p>
-            </div>
-          </div>
-
-          <div class="quick-add-actions">
-            <button mat-stroked-button type="button" (click)="goToCreateRelative('parents')">Додати батька / матір</button>
-            <button mat-stroked-button type="button" (click)="goToCreateRelative('children')">Додати дитину</button>
-            <button mat-stroked-button type="button" (click)="goToCreateRelative('spouses')">Додати партнера / партнерку</button>
-          </div>
-        </mat-card>
-
-        <mat-card class="relationships-card">
+        <mat-card class="family-card">
           <div class="section-heading">
             <div>
               <h2>Родинні зв’язки</h2>
-              <p class="muted">Зберігаються тільки зв’язки батьки-діти та партнери. Похідні зв’язки окремо не зберігаються.</p>
-            </div>
-          </div>
-
-          <div class="relationship-groups">
-            <div class="relationship-column">
-              <div class="column-heading">
-                <h3>Батьки</h3>
-              </div>
-              <div
-                class="relationship-dropzone"
-                [class.relationship-dropzone--active]="activeDropGroup() === 'parents'"
-                [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
-                (dragover)="onRelationshipDragOver($event)"
-                (dragenter)="onRelationshipDragEnter('parents', $event)"
-                (drop)="onRelationshipDrop('parents', $event)"
-              >
-                <ng-container *ngIf="parents().length > 0; else emptyParents">
-                  <mat-card
-                    appearance="outlined"
-                    class="relationship-row"
-                    *ngFor="let item of parents()"
-                    [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
-                    [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
-                    (dragstart)="onRelationshipDragStart($event, item)"
-                    (dragend)="onRelationshipDragEnd()"
-                  >
-                    <div class="relationship-row-main">
-                      <div>
-                        <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                          {{ displayName(item.relatedPerson) }}
-                        </a>
-                        <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
-                      </div>
-                    </div>
-                    <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-                  </mat-card>
-                </ng-container>
-              </div>
-              <ng-template #emptyParents><div class="empty-state">Батьки не вказані.</div></ng-template>
-            </div>
-
-            <div class="relationship-column">
-              <div class="column-heading">
-                <h3>Партнери</h3>
-              </div>
-              <div
-                class="relationship-dropzone"
-                [class.relationship-dropzone--active]="activeDropGroup() === 'spouses'"
-                [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
-                (dragover)="onRelationshipDragOver($event)"
-                (dragenter)="onRelationshipDragEnter('spouses', $event)"
-                (drop)="onRelationshipDrop('spouses', $event)"
-              >
-                <ng-container *ngIf="spouses().length > 0; else emptySpouses">
-                  <mat-card
-                    appearance="outlined"
-                    class="relationship-row"
-                    *ngFor="let item of spouses()"
-                    [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
-                    [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
-                    (dragstart)="onRelationshipDragStart($event, item)"
-                    (dragend)="onRelationshipDragEnd()"
-                  >
-                    <div class="relationship-row-main">
-                      <div>
-                        <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                          {{ displayName(item.relatedPerson) }}
-                        </a>
-                        <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
-                      </div>
-                    </div>
-                    <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-                  </mat-card>
-                </ng-container>
-              </div>
-              <ng-template #emptySpouses><div class="empty-state">Партнери не вказані.</div></ng-template>
-            </div>
-
-            <div class="relationship-column">
-              <div class="column-heading">
-                <h3>Діти</h3>
-              </div>
-              <div
-                class="relationship-dropzone"
-                [class.relationship-dropzone--active]="activeDropGroup() === 'children'"
-                [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
-                (dragover)="onRelationshipDragOver($event)"
-                (dragenter)="onRelationshipDragEnter('children', $event)"
-                (drop)="onRelationshipDrop('children', $event)"
-              >
-                <ng-container *ngIf="children().length > 0; else emptyChildren">
-                  <mat-card
-                    appearance="outlined"
-                    class="relationship-row"
-                    *ngFor="let item of children()"
-                    [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
-                    [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
-                    (dragstart)="onRelationshipDragStart($event, item)"
-                    (dragend)="onRelationshipDragEnd()"
-                  >
-                    <div class="relationship-row-main">
-                      <div>
-                        <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
-                          {{ displayName(item.relatedPerson) }}
-                        </a>
-                        <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
-                      </div>
-                    </div>
-                    <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
-                  </mat-card>
-                </ng-container>
-              </div>
-              <ng-template #emptyChildren><div class="empty-state">Діти не вказані.</div></ng-template>
-            </div>
-          </div>
-        </mat-card>
-
-        <mat-card class="relationship-form-card">
-          <div class="section-heading">
-            <div>
-              <h2>Зв’язати з наявною людиною для {{ displayName(person) }}</h2>
               <p class="muted">
-                {{ relationshipFormDescription() }}
+                Тут зібрані батьки, партнери й діти. Нового родича або наявну людину можна додати прямо з потрібного
+                блоку.
               </p>
             </div>
           </div>
 
-          <form [formGroup]="relationshipForm" (ngSubmit)="createRelationship()" class="form-grid">
-            <div class="relationship-mode-picker">
-              <button
-                mat-stroked-button
-                type="button"
-                class="relationship-mode-button"
-                [class.relationship-mode-button--active]="selectedRelationshipGroup() === 'parents'"
-                (click)="selectRelationshipGroup('parents')"
-              >
-                Додати батька / матір
-              </button>
-              <button
-                mat-stroked-button
-                type="button"
-                class="relationship-mode-button"
-                [class.relationship-mode-button--active]="selectedRelationshipGroup() === 'children'"
-                (click)="selectRelationshipGroup('children')"
-              >
-                Додати дитину
-              </button>
-              <button
-                mat-stroked-button
-                type="button"
-                class="relationship-mode-button"
-                [class.relationship-mode-button--active]="selectedRelationshipGroup() === 'spouses'"
-                (click)="selectRelationshipGroup('spouses')"
-              >
-                Додати партнера / партнерку
-              </button>
+            <div class="relationship-groups">
+              <div class="relationship-column">
+                <div class="column-heading">
+                  <h3>Батьки</h3>
+                  <button mat-stroked-button type="button" (click)="openRelationshipModal('parents')">Додати</button>
+                </div>
+                <div
+                  class="relationship-dropzone"
+                  [class.relationship-dropzone--active]="activeDropGroup() === 'parents'"
+                  [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
+                  (dragover)="onRelationshipDragOver($event)"
+                  (dragenter)="onRelationshipDragEnter('parents', $event)"
+                  (drop)="onRelationshipDrop('parents', $event)"
+                >
+                  <ng-container *ngIf="parents().length > 0; else emptyParents">
+                    <mat-card
+                      appearance="outlined"
+                      class="relationship-row"
+                      *ngFor="let item of parents()"
+                      [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
+                      [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
+                      (dragstart)="onRelationshipDragStart($event, item)"
+                      (dragend)="onRelationshipDragEnd()"
+                    >
+                      <div class="relationship-row-main">
+                        <div>
+                          <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                            {{ displayName(item.relatedPerson) }}
+                          </a>
+                          <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
+                        </div>
+                      </div>
+                      <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                    </mat-card>
+                  </ng-container>
+                </div>
+                <ng-template #emptyParents><div class="empty-state">Батьки не вказані.</div></ng-template>
+              </div>
+
+              <div class="relationship-column">
+                <div class="column-heading">
+                  <h3>Партнери</h3>
+                  <button mat-stroked-button type="button" (click)="openRelationshipModal('spouses')">Додати</button>
+                </div>
+                <div
+                  class="relationship-dropzone"
+                  [class.relationship-dropzone--active]="activeDropGroup() === 'spouses'"
+                  [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
+                  (dragover)="onRelationshipDragOver($event)"
+                  (dragenter)="onRelationshipDragEnter('spouses', $event)"
+                  (drop)="onRelationshipDrop('spouses', $event)"
+                >
+                  <ng-container *ngIf="spouses().length > 0; else emptySpouses">
+                    <mat-card
+                      appearance="outlined"
+                      class="relationship-row"
+                      *ngFor="let item of spouses()"
+                      [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
+                      [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
+                      (dragstart)="onRelationshipDragStart($event, item)"
+                      (dragend)="onRelationshipDragEnd()"
+                    >
+                      <div class="relationship-row-main">
+                        <div>
+                          <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                            {{ displayName(item.relatedPerson) }}
+                          </a>
+                          <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
+                        </div>
+                      </div>
+                      <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                    </mat-card>
+                  </ng-container>
+                </div>
+                <ng-template #emptySpouses><div class="empty-state">Партнери не вказані.</div></ng-template>
+              </div>
+
+              <div class="relationship-column">
+                <div class="column-heading">
+                  <h3>Діти</h3>
+                  <button mat-stroked-button type="button" (click)="openRelationshipModal('children')">Додати</button>
+                </div>
+                <div
+                  class="relationship-dropzone"
+                  [class.relationship-dropzone--active]="activeDropGroup() === 'children'"
+                  [class.relationship-dropzone--dragging]="!!draggedRelationshipId()"
+                  (dragover)="onRelationshipDragOver($event)"
+                  (dragenter)="onRelationshipDragEnter('children', $event)"
+                  (drop)="onRelationshipDrop('children', $event)"
+                >
+                  <ng-container *ngIf="children().length > 0; else emptyChildren">
+                    <mat-card
+                      appearance="outlined"
+                      class="relationship-row"
+                      *ngFor="let item of children()"
+                      [class.relationship-row--dragging]="draggedRelationshipId() === item.relationship.id"
+                      [attr.draggable]="isOwnProfile() && !isSubmittingRelationship()"
+                      (dragstart)="onRelationshipDragStart($event, item)"
+                      (dragend)="onRelationshipDragEnd()"
+                    >
+                      <div class="relationship-row-main">
+                        <div>
+                          <a mat-button [routerLink]="['/persons', item.relatedPerson.id]" class="person-link">
+                            {{ displayName(item.relatedPerson) }}
+                          </a>
+                          <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
+                        </div>
+                      </div>
+                      <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                    </mat-card>
+                  </ng-container>
+                </div>
+                <ng-template #emptyChildren><div class="empty-state">Діти не вказані.</div></ng-template>
+              </div>
+            </div>
+        </mat-card>
+
+        <div class="relationship-modal-backdrop" *ngIf="relationshipModalGroup()" (click)="closeRelationshipModal()">
+          <mat-card class="relationship-modal" (click)="$event.stopPropagation()">
+            <div class="relationship-modal-header">
+              <div>
+                <h2>{{ relationshipModalTitle() }}</h2>
+                <p class="muted">{{ relationshipFormDescription() }}</p>
+              </div>
+              <button mat-button type="button" class="modal-close-button" (click)="closeRelationshipModal()">×</button>
             </div>
 
-            <div class="field-grid">
+            <form [formGroup]="relationshipForm" (ngSubmit)="createRelationship()" class="form-grid">
               <mat-form-field appearance="outline">
                 <mat-label>{{ relationshipCandidateLabel() }}</mat-label>
                 <input
@@ -267,33 +224,42 @@ import { RelationshipsService } from "../services/relationships.service";
                 </mat-autocomplete>
               </mat-form-field>
 
-              <mat-form-field appearance="outline" *ngIf="selectedRelationshipGroup() === 'spouses'">
-                <mat-label>Дата початку стосунків</mat-label>
-                <input matInput id="startDate" type="date" formControlName="startDate">
+              <div class="field-grid" *ngIf="selectedRelationshipGroup() === 'spouses'">
+                <mat-form-field appearance="outline">
+                  <mat-label>Дата початку стосунків</mat-label>
+                  <input matInput id="startDate" type="date" formControlName="startDate">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Дата завершення стосунків</mat-label>
+                  <input matInput id="endDate" type="date" formControlName="endDate">
+                </mat-form-field>
+              </div>
+
+              <div class="relationship-preview" *ngIf="relationshipPreviewText() as preview">
+                {{ preview }}
+              </div>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Нотатки</mat-label>
+                <textarea matInput id="notes" formControlName="notes"></textarea>
               </mat-form-field>
 
-              <mat-form-field appearance="outline" *ngIf="selectedRelationshipGroup() === 'spouses'">
-                <mat-label>Дата завершення стосунків</mat-label>
-                <input matInput id="endDate" type="date" formControlName="endDate">
-              </mat-form-field>
-            </div>
+              <div class="modal-helper">
+                Якщо потрібної людини немає в списку, можна створити нового родича, і зв’язок додасться автоматично.
+              </div>
 
-            <div class="relationship-preview" *ngIf="relationshipPreviewText() as preview">
-              {{ preview }}
-            </div>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Нотатки</mat-label>
-              <textarea matInput id="notes" formControlName="notes"></textarea>
-            </mat-form-field>
-
-            <div class="form-actions">
-              <button mat-flat-button color="primary" type="submit" [disabled]="relationshipForm.invalid || isSubmittingRelationship()">
-                {{ isSubmittingRelationship() ? "Збереження..." : submitRelationshipLabel() }}
-              </button>
-            </div>
-          </form>
-        </mat-card>
+              <div class="form-actions form-actions--split">
+                <button mat-stroked-button type="button" (click)="createNewRelativeFromModal()">
+                  Створити нову людину
+                </button>
+                <button mat-flat-button color="primary" type="submit" [disabled]="relationshipForm.invalid || isSubmittingRelationship()">
+                  {{ isSubmittingRelationship() ? "Збереження..." : submitRelationshipLabel() }}
+                </button>
+              </div>
+            </form>
+          </mat-card>
+        </div>
       </ng-container>
     </section>
   `,
@@ -306,9 +272,7 @@ import { RelationshipsService } from "../services/relationships.service";
       }
 
       .profile-card,
-      .quick-add-card,
-      .relationships-card,
-      .relationship-form-card {
+      .family-card {
         padding: clamp(20px, 2.8vw, 28px);
         border: 1px solid rgba(127, 160, 200, 0.14);
         background:
@@ -426,10 +390,14 @@ import { RelationshipsService } from "../services/relationships.service";
         margin-bottom: 16px;
       }
 
-      .quick-add-actions {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
+      .family-card {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .section-heading p {
+        margin: 6px 0 0;
       }
 
       .relationship-groups {
@@ -460,6 +428,10 @@ import { RelationshipsService } from "../services/relationships.service";
 
       .relationship-column h3 {
         margin: 0;
+      }
+
+      .column-heading > .mat-mdc-button-base {
+        flex: 0 0 auto;
       }
 
       .relationship-dropzone {
@@ -562,6 +534,70 @@ import { RelationshipsService } from "../services/relationships.service";
         justify-content: flex-start;
       }
 
+      .form-actions--split {
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .relationship-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(18, 31, 47, 0.48);
+        backdrop-filter: blur(8px);
+      }
+
+      .relationship-modal {
+        width: min(680px, 100%);
+        max-height: min(88vh, 920px);
+        overflow: auto;
+        padding: clamp(20px, 2.8vw, 28px);
+        border: 1px solid rgba(127, 160, 200, 0.16);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 251, 255, 0.99)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.2), transparent 42%);
+      }
+
+      .relationship-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .relationship-modal-header h2 {
+        margin: 0;
+      }
+
+      .relationship-modal-header p {
+        margin: 6px 0 0;
+      }
+
+      .modal-close-button {
+        min-width: 44px;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border-radius: 999px;
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .modal-helper {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(242, 247, 255, 0.9);
+        border: 1px solid rgba(127, 160, 200, 0.14);
+        color: #38526b;
+      }
+
       @media (max-width: 960px) {
         .profile-header {
           flex-direction: column;
@@ -573,7 +609,6 @@ import { RelationshipsService } from "../services/relationships.service";
       }
 
       @media (max-width: 860px) {
-
         .relationship-row {
           flex-direction: column;
           align-items: flex-start;
@@ -609,16 +644,30 @@ import { RelationshipsService } from "../services/relationships.service";
           grid-template-columns: 1fr;
         }
 
-        .quick-add-actions {
-          grid-template-columns: 1fr;
-        }
-
         .profile-actions > .mat-mdc-button-base,
-        .quick-add-actions > .mat-mdc-button-base,
         .relationship-mode-picker > .mat-mdc-button-base,
         .form-actions > .mat-mdc-button-base {
           width: 100%;
           justify-content: center;
+        }
+
+        .form-actions--split > .mat-mdc-button-base {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .relationship-modal-backdrop {
+          padding: 14px;
+          align-items: flex-end;
+        }
+
+        .relationship-modal {
+          width: 100%;
+          max-height: 90vh;
+        }
+
+        .column-heading {
+          flex-wrap: wrap;
         }
 
         .relationship-row > .mat-mdc-button-base {
@@ -645,6 +694,7 @@ export class PersonDetailsPageComponent {
   readonly isSubmittingRelationship = signal(false);
   readonly draggedRelationshipId = signal<string | null>(null);
   readonly activeDropGroup = signal<RelationshipGroup | null>(null);
+  readonly relationshipModalGroup = signal<RelationshipGroup | null>(null);
 
   readonly relationshipForm = new FormGroup({
     type: new FormControl<Relationship["type"]>("parent_child", {
@@ -767,6 +817,19 @@ export class PersonDetailsPageComponent {
     return baseText;
   }
 
+  relationshipModalTitle(): string {
+    switch (this.relationshipModalGroup()) {
+      case "parents":
+        return "Додати батька або матір";
+      case "children":
+        return "Додати дитину";
+      case "spouses":
+        return "Додати партнера або партнерку";
+      default:
+        return "Додати родича";
+    }
+  }
+
   relationshipPreviewText(): string | null {
     const currentPerson = this.person();
     const relatedPerson = this.selectedRelationshipCandidate();
@@ -812,6 +875,28 @@ export class PersonDetailsPageComponent {
         group,
       },
     });
+  }
+
+  openRelationshipModal(group: RelationshipGroup): void {
+    this.errorMessage.set("");
+    this.resetRelationshipForm();
+    this.selectRelationshipGroup(group);
+    this.relationshipModalGroup.set(group);
+  }
+
+  closeRelationshipModal(): void {
+    this.relationshipModalGroup.set(null);
+    this.resetRelationshipForm();
+  }
+
+  async createNewRelativeFromModal(): Promise<void> {
+    const group = this.relationshipModalGroup();
+
+    if (!group) {
+      return;
+    }
+
+    await this.goToCreateRelative(group);
   }
 
   parents(): RelationshipView[] {
@@ -896,6 +981,7 @@ export class PersonDetailsPageComponent {
       const value = this.relationshipForm.getRawValue();
       const payload = buildRelationshipPayload(currentPerson.id, value);
       await awaitOne<Relationship>(this.relationshipsService.create(payload));
+      this.relationshipModalGroup.set(null);
       this.resetRelationshipForm();
       this.snackBar.open("Зв’язок збережено", "Закрити", { duration: 3000 });
       await this.loadPage(currentPerson.id);
