@@ -240,6 +240,8 @@ export async function addSelfToPublicFamily(
 
   const input = await readJson<PublicSelfAddDto>(request);
   const connectedPersonIds = new Set(await listConnectedPersonIds(env.DB, familySpace.root_person_id));
+  const relatedToPersonId = input.relatedToPersonId?.trim() || null;
+  const relationKind = normalizePublicRelationshipKind(input.relationKind);
   const existingPersonId = input.existingPersonId?.trim() || null;
 
   if (existingPersonId) {
@@ -253,9 +255,28 @@ export async function addSelfToPublicFamily(
       throw new HttpError(404, "Обрану людину не знайдено");
     }
 
+    if (!relatedToPersonId || !relationKind) {
+      const response: PublicSelfAddResponse = {
+        person,
+        relationship: null,
+        usedExistingPerson: true,
+        alreadyInTree: true,
+      };
+
+      return json(response);
+    }
+
+    const relationship = await createOrFindPublicRelationship(
+      env.DB,
+      existingPersonId,
+      relatedToPersonId,
+      relationKind,
+      connectedPersonIds,
+    );
+
     const response: PublicSelfAddResponse = {
       person,
-      relationship: null,
+      relationship,
       usedExistingPerson: true,
       alreadyInTree: true,
     };
@@ -263,21 +284,14 @@ export async function addSelfToPublicFamily(
     return json(response);
   }
 
-  const relatedToPersonId = input.relatedToPersonId?.trim() || null;
-  const relationKind = normalizePublicRelationshipKind(input.relationKind);
-
   if (!relatedToPersonId || !relationKind) {
-    throw new HttpError(400, "Щоб додати себе до дерева, оберіть родича і тип зв’язку");
-  }
-
-  if (!connectedPersonIds.has(relatedToPersonId)) {
-    throw new HttpError(404, "Обрану людину не знайдено в цьому дереві");
+    throw new HttpError(400, "Щоб додати родича до дерева, оберіть людину в схемі і тип зв’язку");
   }
 
   const personInput = normalizeCreatePersonDto((input.person ?? {}) as CreatePersonDto);
 
   if (!personInput.lastName || !personInput.birthDate) {
-    throw new HttpError(400, "Для додавання себе в дерево вкажіть щонайменше ім’я, прізвище і дату народження");
+    throw new HttpError(400, "Для додавання родича в дерево вкажіть щонайменше ім’я, прізвище і дату народження");
   }
 
   const duplicate = await findDuplicatePersonByIdentity(env.DB, {
@@ -360,66 +374,13 @@ export async function addSelfToPublicFamily(
     throw new HttpError(400, "Не можна створити зв’язок людини самої з собою");
   }
 
-  const normalizedRelationship = normalizePublicRelationship(personId, relatedToPersonId, relationKind);
-  const existingRelationship = await env.DB
-    .prepare(
-      `
-        SELECT id, type, person1_id, person2_id, start_date, end_date, notes, created_at, updated_at
-        FROM global_relationships
-        WHERE type = ?
-          AND person1_id = ?
-          AND person2_id = ?
-        LIMIT 1
-      `,
-    )
-    .bind(normalizedRelationship.type, normalizedRelationship.person1Id, normalizedRelationship.person2Id)
-    .first<RelationshipRow>();
-
-  let relationship: Relationship | null = null;
-
-  if (existingRelationship) {
-    relationship = mapRelationshipRow(existingRelationship);
-  } else {
-    const relationshipId = crypto.randomUUID();
-    await env.DB
-      .prepare(
-        `
-          INSERT INTO global_relationships (
-            id,
-            type,
-            person1_id,
-            person2_id,
-            start_date,
-            end_date,
-            notes,
-            created_at,
-            updated_at
-          ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
-        `,
-      )
-      .bind(
-        relationshipId,
-        normalizedRelationship.type,
-        normalizedRelationship.person1Id,
-        normalizedRelationship.person2Id,
-        timestamp,
-        timestamp,
-      )
-      .run();
-
-    const createdRelationship = await env.DB
-      .prepare(
-        `
-          SELECT id, type, person1_id, person2_id, start_date, end_date, notes, created_at, updated_at
-          FROM global_relationships
-          WHERE id = ?
-        `,
-      )
-      .bind(relationshipId)
-      .first<RelationshipRow>();
-
-    relationship = createdRelationship ? mapRelationshipRow(createdRelationship) : null;
-  }
+  const relationship = await createOrFindPublicRelationship(
+    env.DB,
+    personId,
+    relatedToPersonId,
+    relationKind,
+    connectedPersonIds,
+  );
 
   const person = await getPersonByIdGlobal(env.DB, personId);
 
@@ -532,8 +493,142 @@ async function listConnectedPersonIds(db: D1Database, rootPersonId: string): Pro
   return result.results.map((row) => row.id);
 }
 
+async function createOrFindPublicRelationship(
+  db: D1Database,
+  personId: string,
+  relatedToPersonId: string,
+  relationKind: PublicSelfRelationshipKind,
+  connectedPersonIds: Set<string>,
+): Promise<Relationship | null> {
+  if (!connectedPersonIds.has(relatedToPersonId)) {
+    throw new HttpError(404, "Обрану людину не знайдено в цьому дереві");
+  }
+
+  if (personId === relatedToPersonId) {
+    throw new HttpError(400, "Не можна створити зв’язок людини самої з собою");
+  }
+
+  if (relationKind === "sibling") {
+    const parentRelationships = await db
+      .prepare(
+        `
+          SELECT id, type, person1_id, person2_id, start_date, end_date, notes, created_at, updated_at
+          FROM global_relationships
+          WHERE type = 'parent_child'
+            AND person2_id = ?
+          ORDER BY created_at
+        `,
+      )
+      .bind(relatedToPersonId)
+      .all<RelationshipRow>();
+
+    if (parentRelationships.results.length === 0) {
+      throw new HttpError(400, "Щоб додати брата або сестру, спочатку додайте хоча б одного з батьків цієї людини");
+    }
+
+    let firstRelationship: Relationship | null = null;
+
+    for (const parentRelationship of parentRelationships.results) {
+      if (parentRelationship.person1_id === personId) {
+        continue;
+      }
+
+      const relationship = await findExistingOrCreateRelationship(
+        db,
+        "parent_child",
+        parentRelationship.person1_id,
+        personId,
+      );
+
+      if (!firstRelationship && relationship) {
+        firstRelationship = relationship;
+      }
+    }
+
+    if (!firstRelationship) {
+      throw new HttpError(400, "Обрану людину не можна додати як брата або сестру для цього профілю");
+    }
+
+    return firstRelationship;
+  }
+
+  const normalizedRelationship = normalizePublicRelationship(personId, relatedToPersonId, relationKind);
+  return findExistingOrCreateRelationship(
+    db,
+    normalizedRelationship.type,
+    normalizedRelationship.person1Id,
+    normalizedRelationship.person2Id,
+  );
+}
+
+async function findExistingOrCreateRelationship(
+  db: D1Database,
+  type: Relationship["type"],
+  person1Id: string,
+  person2Id: string,
+): Promise<Relationship | null> {
+  const existingRelationship = await db
+    .prepare(
+      `
+        SELECT id, type, person1_id, person2_id, start_date, end_date, notes, created_at, updated_at
+        FROM global_relationships
+        WHERE type = ?
+          AND person1_id = ?
+          AND person2_id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(type, person1Id, person2Id)
+    .first<RelationshipRow>();
+
+  if (existingRelationship) {
+    return mapRelationshipRow(existingRelationship);
+  }
+
+  const relationshipId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  await db
+    .prepare(
+      `
+        INSERT INTO global_relationships (
+          id,
+          type,
+          person1_id,
+          person2_id,
+          start_date,
+          end_date,
+          notes,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+      `,
+    )
+    .bind(
+      relationshipId,
+      type,
+      person1Id,
+      person2Id,
+      timestamp,
+      timestamp,
+    )
+    .run();
+
+  const createdRelationship = await db
+    .prepare(
+      `
+        SELECT id, type, person1_id, person2_id, start_date, end_date, notes, created_at, updated_at
+        FROM global_relationships
+        WHERE id = ?
+      `,
+    )
+    .bind(relationshipId)
+    .first<RelationshipRow>();
+
+  return createdRelationship ? mapRelationshipRow(createdRelationship) : null;
+}
+
 function normalizePublicRelationshipKind(value: PublicSelfRelationshipKind | null | undefined): PublicSelfRelationshipKind | null {
-  if (value === "parent" || value === "child" || value === "spouse") {
+  if (value === "parent" || value === "child" || value === "spouse" || value === "sibling") {
     return value;
   }
 
@@ -574,6 +669,12 @@ function normalizePublicRelationship(
             person1Id: relatedToPersonId,
             person2Id: personId,
           };
+    case "sibling":
+      return {
+        type: "parent_child",
+        person1Id: relatedToPersonId,
+        person2Id: personId,
+      };
   }
 }
 

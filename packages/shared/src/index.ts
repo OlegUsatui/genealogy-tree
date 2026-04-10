@@ -143,7 +143,7 @@ export interface PublicFamilyTreeResponse {
   tree: TreeResponse;
 }
 
-export type PublicSelfRelationshipKind = "parent" | "child" | "spouse";
+export type PublicSelfRelationshipKind = "parent" | "child" | "spouse" | "sibling";
 
 export interface PublicSelfAddDto {
   existingPersonId?: string | null;

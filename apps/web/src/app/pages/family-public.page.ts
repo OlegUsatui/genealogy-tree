@@ -15,44 +15,81 @@ import { FamilySpacesService } from "../services/family-spaces.service";
 import { buildFamilyNetworkDiagram, type FamilyNetworkDiagram, type FamilyNetworkNode } from "./family-network-diagram";
 
 type LivingOption = "unknown" | "true" | "false";
-type PublicRelationKind = "parent" | "child" | "spouse";
+type PublicRelationKind = "parent" | "child" | "spouse" | "sibling";
+type PublicQuickAddAction = "father" | "mother" | "brother" | "sister" | "son" | "daughter";
+type QuickAddMenuState = {
+  person: Person;
+  centerX: number;
+  centerY: number;
+};
 
 @Component({
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, ...MATERIAL_IMPORTS],
   template: `
     <section class="tree-page">
-      <div class="tree-hud tree-hud--public" *ngIf="isLoading() || errorMessage() || familyTitle()">
-        <div class="family-banner" *ngIf="familyTitle() as title">
+      <div class="tree-hud tree-hud--public" *ngIf="isLoading() || errorMessage() || (familyTitle() && isBannerVisible())">
+        <div class="family-banner" *ngIf="familyTitle() && isBannerVisible()">
           <div class="family-banner-copy">
-            <span class="family-banner-kicker">Сімейне посилання</span>
-            <h1>{{ title }}</h1>
-            <p class="muted">
-              Це read-only перегляд усієї мережі родини. Якщо ви належите до цієї родини, можете
-              додати себе без реєстрації.
-            </p>
+            <strong class="family-banner-title">Огляд сімʼї</strong>
+            <p class="muted">Щоб додати родича, натисніть на потрібну людину в схемі.</p>
           </div>
 
-          <div class="family-banner-actions">
-            <button mat-flat-button color="primary" type="button" (click)="openJoinPanel()">
-              Додати себе
-            </button>
-          </div>
+          <button type="button" class="family-banner-close" aria-label="Закрити банер" (click)="closeBanner()">
+            <span aria-hidden="true">×</span>
+          </button>
         </div>
 
         <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
         <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
       </div>
 
+      <div class="quick-add-overlay" *ngIf="quickAddMenu()" (click)="closeQuickAddMenu()"></div>
+      <div
+        class="quick-add-menu"
+        *ngIf="quickAddMenu() as menu"
+        [style.left.px]="menu.centerX"
+        [style.top.px]="menu.centerY"
+        (click)="$event.stopPropagation()"
+      >
+        <button type="button" class="quick-add-option quick-add-option--top-left" (click)="chooseQuickAddAction('father')">
+          Додати батька
+        </button>
+        <button type="button" class="quick-add-option quick-add-option--top-right" (click)="chooseQuickAddAction('mother')">
+          Додати матір
+        </button>
+        <button type="button" class="quick-add-option quick-add-option--left" (click)="chooseQuickAddAction('sister')">
+          Додати сестру
+        </button>
+        <button type="button" class="quick-add-option quick-add-option--right" (click)="chooseQuickAddAction('brother')">
+          Додати брата
+        </button>
+        <button type="button" class="quick-add-option quick-add-option--bottom-left" (click)="chooseQuickAddAction('son')">
+          Додати сина
+        </button>
+        <button type="button" class="quick-add-option quick-add-option--bottom-right" (click)="chooseQuickAddAction('daughter')">
+          Додати дочку
+        </button>
+
+        <div class="quick-add-target-card">
+          <div class="quick-add-target-photo-shell">
+            <img *ngIf="renderablePhotoUrl(menu.person); else quickAddPhotoFallback" [src]="renderablePhotoUrl(menu.person)!" alt="Фото людини" class="quick-add-target-photo">
+            <ng-template #quickAddPhotoFallback>
+              <div class="quick-add-target-photo-fallback">{{ photoInitials(menu.person) }}</div>
+            </ng-template>
+          </div>
+          <strong>{{ displayName(menu.person) }}</strong>
+        </div>
+      </div>
+
       <div class="public-join-overlay" *ngIf="isJoinPanelOpen()" (click)="closeJoinPanel()">
         <section class="public-join-card" (click)="$event.stopPropagation()">
-          <div class="public-join-header">
+          <div class="public-join-header" *ngIf="selectedRelatedPerson() as related">
             <div>
-              <span class="public-join-kicker">Додати себе до родини</span>
-              <h2>Хто ви в цій родині</h2>
+              <span class="public-join-kicker">Додати родича</span>
+              <h2>{{ quickAddHeading(related) }}</h2>
               <p class="muted">
-                Введіть свої дані. Якщо ви вже є в цій мережі родини, оберіть себе зі списку. Якщо ні,
-                вкажіть, до кого саме ви додаєтесь.
+                {{ quickAddDescription(related) }}
               </p>
             </div>
 
@@ -103,12 +140,12 @@ type PublicRelationKind = "parent" | "child" | "spouse";
 
             <div class="selected-match" *ngIf="selectedExistingCandidate() as selected">
               <div class="selected-match-copy">
-                <span class="selected-match-eyebrow">Ми вже бачимо вас у цій мережі родини</span>
+                <span class="selected-match-eyebrow">Ця людина вже є в цій мережі родини</span>
                 <strong>{{ displayName(selected) }}</strong>
-                <span class="muted">Ми просто підсвітимо ваш профіль у схемі, без створення дубля.</span>
+                <span class="muted">Ми використаємо цей профіль і просто додамо правильний зв’язок, без створення дубля.</span>
               </div>
 
-              <button mat-stroked-button type="button" (click)="clearExistingSelection()">Це не я</button>
+              <button mat-stroked-button type="button" (click)="clearExistingSelection()">Обрати іншу людину</button>
             </div>
 
             <div class="match-panel" *ngIf="showSelfMatchesPanel()">
@@ -132,53 +169,20 @@ type PublicRelationKind = "parent" | "child" | "spouse";
                     </div>
                     <span class="match-option-meta">{{ candidateMeta(candidate) }}</span>
                   </div>
-                  <span class="match-option-action">Це я</span>
+                  <span class="match-option-action">Обрати</span>
                 </button>
               </div>
             </div>
 
-            <ng-container *ngIf="!selectedExistingCandidate()">
+            <ng-container *ngIf="!selectedExistingCandidate() && selectedRelatedPerson() as related">
               <div class="relation-panel">
                 <div class="match-panel-copy">
-                  <h3>Як саме ви додаєтесь</h3>
-                  <p class="muted">Оберіть людину з мережі родини і вкажіть, ким ви для неї є.</p>
+                  <h3>{{ quickAddSummaryTitle() }}</h3>
+                  <p class="muted">{{ quickAddSummaryDescription(related) }}</p>
                 </div>
 
-                <div class="field-grid">
-                  <mat-form-field appearance="outline">
-                    <mat-label>Тип зв’язку</mat-label>
-                    <mat-select formControlName="relationKind">
-                      <mat-option value="parent">Я є батьком / матір’ю цієї людини</mat-option>
-                      <mat-option value="child">Я є дитиною цієї людини</mat-option>
-                      <mat-option value="spouse">Я є партнером цієї людини</mat-option>
-                    </mat-select>
-                  </mat-form-field>
-
-                  <mat-form-field appearance="outline">
-                    <mat-label>Оберіть родича з мережі</mat-label>
-                    <input
-                      matInput
-                      formControlName="relatedToQuery"
-                      [matAutocomplete]="relativeAutocomplete"
-                      placeholder="Почніть вводити ім’я або прізвище"
-                    >
-                    <mat-autocomplete
-                      #relativeAutocomplete="matAutocomplete"
-                      [displayWith]="displayRelatedPerson"
-                      (optionSelected)="selectRelatedPerson($event.option.value)"
-                    >
-                      <mat-option *ngFor="let person of relationTargetMatches()" [value]="person">
-                        <div class="candidate-option">
-                          <span class="candidate-title">{{ displayName(person) }}</span>
-                          <span class="candidate-meta">{{ candidateMeta(person) }}</span>
-                        </div>
-                      </mat-option>
-                    </mat-autocomplete>
-                  </mat-form-field>
-                </div>
-
-                <div class="selected-relative" *ngIf="selectedRelatedPerson() as related">
-                  <span class="muted">Зв’язок буде створено з:</span>
+                <div class="selected-relative">
+                  <span class="muted">Родича буде додано до:</span>
                   <strong>{{ displayName(related) }}</strong>
                 </div>
               </div>
@@ -240,16 +244,16 @@ type PublicRelationKind = "parent" | "child" | "spouse";
               <g
                 *ngFor="let node of diagram.nodes"
                 class="tree-node-group"
-                [class.root-node]="node.role === 'focus'"
                 [class.ancestor-node]="node.role === 'ancestor'"
                 [class.descendant-node]="node.role === 'descendant'"
                 [class.spouse-node]="node.role === 'same'"
                 [class.node-highlighted]="highlightedPersonId() === node.person.id"
                 [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
+                (click)="openQuickAddMenu(node.person, $event)"
               >
                 <rect class="tree-node-card" [attr.width]="node.width" [attr.height]="node.height" rx="24" ry="24"></rect>
                 <text class="tree-node-badge" [attr.x]="node.width / 2" y="22" text-anchor="middle">
-                  {{ nodeRoleLabel(node) }}
+                  {{ nodeGenerationLabel(node) }}
                 </text>
                 <circle class="tree-node-photo-frame" [attr.cx]="node.width / 2" cy="58" r="32"></circle>
                 <defs>
@@ -318,6 +322,40 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         justify-content: center;
       }
 
+      @keyframes overlay-fade-in {
+        from {
+          opacity: 0;
+        }
+
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes surface-pop-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px) scale(0.96);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      @keyframes card-pop-in {
+        from {
+          opacity: 0;
+          transform: translateY(16px) scale(0.96);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
       .tree-hud {
         position: absolute;
         top: 18px;
@@ -336,22 +374,24 @@ type PublicRelationKind = "parent" | "child" | "spouse";
 
       .family-banner {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
-        gap: 18px;
-        padding: 18px 20px;
+        gap: 12px;
+        padding: 14px 16px;
         border-radius: 22px;
         border: 1px solid rgba(127, 160, 200, 0.18);
         background:
           linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.96)),
           linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
         box-shadow: 0 18px 40px rgba(31, 53, 79, 0.14);
+        animation: surface-pop-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       .family-banner-copy {
         display: flex;
         flex-direction: column;
         gap: 6px;
+        min-width: 0;
       }
 
       .family-banner-copy h1 {
@@ -359,9 +399,45 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         font-size: clamp(28px, 4vw, 36px);
       }
 
+      .family-banner-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: #234261;
+      }
+
       .family-banner-copy p {
         margin: 0;
         max-width: 760px;
+      }
+
+      .family-banner-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(96, 114, 123, 0.16);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--text);
+        cursor: pointer;
+        transition:
+          border-color 120ms ease,
+          background-color 120ms ease,
+          transform 120ms ease;
+      }
+
+      .family-banner-close:hover {
+        border-color: rgba(53, 95, 83, 0.28);
+        background: rgba(255, 255, 255, 0.98);
+        transform: translateY(-1px);
+      }
+
+      .family-banner-close span {
+        display: block;
+        font-size: 22px;
+        line-height: 1;
       }
 
       .family-banner-kicker,
@@ -389,6 +465,132 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         box-shadow: 0 10px 30px rgba(29, 38, 47, 0.08);
       }
 
+      .quick-add-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 7;
+        background: rgba(16, 26, 34, 0.42);
+        backdrop-filter: blur(4px);
+        animation: overlay-fade-in 160ms ease-out;
+      }
+
+      .quick-add-menu {
+        position: fixed;
+        z-index: 8;
+        width: 0;
+        height: 0;
+      }
+
+      .quick-add-option,
+      .quick-add-target-card {
+        position: absolute;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
+        box-shadow: 0 18px 40px rgba(31, 53, 79, 0.18);
+        transform-origin: center center;
+      }
+
+      .quick-add-option {
+        min-width: 154px;
+        padding: 11px 14px;
+        border-radius: 16px;
+        color: var(--text);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease;
+        animation: surface-pop-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+
+      .quick-add-option:hover {
+        transform: translateY(-1px);
+        border-color: rgba(53, 95, 83, 0.28);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(250, 252, 255, 0.99)),
+          linear-gradient(135deg, rgba(222, 233, 248, 0.18), transparent 42%);
+      }
+
+      .quick-add-option--top-left {
+        animation-delay: 10ms;
+        left: -166px;
+        top: -206px;
+      }
+
+      .quick-add-option--top-right {
+        animation-delay: 30ms;
+        left: 12px;
+        top: -206px;
+      }
+
+      .quick-add-option--left {
+        animation-delay: 50ms;
+        left: -232px;
+        top: -24px;
+      }
+
+      .quick-add-option--right {
+        animation-delay: 70ms;
+        left: 96px;
+        top: -24px;
+      }
+
+      .quick-add-option--bottom-left {
+        animation-delay: 90ms;
+        left: -166px;
+        top: 150px;
+      }
+
+      .quick-add-option--bottom-right {
+        animation-delay: 110ms;
+        left: 12px;
+        top: 150px;
+      }
+
+      .quick-add-target-card {
+        left: -70px;
+        top: -56px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        width: 140px;
+        padding: 16px 14px;
+        border-radius: 22px;
+        text-align: center;
+        animation: card-pop-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+
+      .quick-add-target-photo-shell {
+        width: 72px;
+        height: 72px;
+        overflow: hidden;
+        border-radius: 22px;
+        border: 1px solid rgba(127, 160, 200, 0.18);
+        background: linear-gradient(180deg, rgba(233, 241, 251, 0.92), rgba(219, 233, 248, 0.92));
+      }
+
+      .quick-add-target-photo,
+      .quick-add-target-photo-fallback {
+        width: 100%;
+        height: 100%;
+      }
+
+      .quick-add-target-photo {
+        display: block;
+        object-fit: cover;
+      }
+
+      .quick-add-target-photo-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+        font-weight: 800;
+        color: #234261;
+      }
+
       .public-join-overlay {
         position: fixed;
         inset: 0;
@@ -399,6 +601,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         padding: 20px;
         background: rgba(16, 26, 34, 0.38);
         backdrop-filter: blur(8px);
+        animation: overlay-fade-in 180ms ease-out;
       }
 
       .public-join-card {
@@ -409,6 +612,7 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         border-radius: 24px;
         background: rgba(255, 255, 255, 0.98);
         box-shadow: 0 24px 56px rgba(19, 34, 43, 0.22);
+        animation: card-pop-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       .public-join-header {
@@ -661,13 +865,33 @@ type PublicRelationKind = "parent" | "child" | "spouse";
         filter: url(#nodeShadow);
       }
 
+      .tree-node-group {
+        cursor: pointer;
+      }
+
+      .tree-node-group:hover .tree-node-card {
+        stroke: rgba(31, 103, 198, 0.42);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .family-banner,
+        .quick-add-overlay,
+        .quick-add-option,
+        .quick-add-target-card,
+        .public-join-overlay,
+        .public-join-card {
+          animation: none !important;
+        }
+
+        .quick-add-option,
+        .family-banner-close {
+          transition: none !important;
+        }
+      }
+
       .node-highlighted .tree-node-card {
         stroke: rgba(31, 103, 198, 0.5);
         stroke-width: 2;
-      }
-
-      .root-node .tree-node-card {
-        fill: rgba(223, 236, 255, 0.98);
       }
 
       .ancestor-node .tree-node-card {
@@ -680,6 +904,10 @@ type PublicRelationKind = "parent" | "child" | "spouse";
 
       .spouse-node .tree-node-card {
         fill: rgba(230, 240, 255, 0.98);
+      }
+
+      .tree-node-group:not(.ancestor-node):not(.descendant-node):not(.spouse-node) .tree-node-card {
+        fill: rgba(236, 244, 255, 0.98);
       }
 
       .tree-node-badge {
@@ -723,6 +951,29 @@ type PublicRelationKind = "parent" | "child" | "spouse";
       }
 
       @media (max-width: 760px) {
+        .quick-add-menu {
+          left: 50% !important;
+          top: 50% !important;
+          transform: translate(-50%, -50%);
+        }
+
+        .quick-add-option--top-left,
+        .quick-add-option--top-right,
+        .quick-add-option--left,
+        .quick-add-option--right,
+        .quick-add-option--bottom-left,
+        .quick-add-option--bottom-right {
+          left: -90px;
+          min-width: 180px;
+        }
+
+        .quick-add-option--top-left { top: -248px; }
+        .quick-add-option--top-right { top: -194px; }
+        .quick-add-option--left { top: -140px; }
+        .quick-add-option--right { top: -86px; }
+        .quick-add-option--bottom-left { top: 144px; }
+        .quick-add-option--bottom-right { top: 198px; }
+
         .field-grid {
           grid-template-columns: 1fr;
         }
@@ -772,11 +1023,14 @@ export class FamilyPublicPageComponent {
   readonly diagram = signal<FamilyNetworkDiagram | null>(null);
   readonly familyTitle = signal("");
   readonly highlightedPersonId = signal<string | null>(null);
+  readonly isBannerVisible = signal(true);
+  readonly quickAddMenu = signal<QuickAddMenuState | null>(null);
   readonly isJoinPanelOpen = signal(false);
   readonly isSubmitting = signal(false);
   readonly joinErrorMessage = signal("");
   readonly selectedExistingCandidate = signal<Person | null>(null);
   readonly selectedRelatedPerson = signal<Person | null>(null);
+  readonly selectedQuickAddAction = signal<PublicQuickAddAction | null>(null);
   readonly zoom = signal(1);
   readonly panX = signal(0);
   readonly panY = signal(0);
@@ -882,20 +1136,89 @@ export class FamilyPublicPageComponent {
     return `public-tree-node-photo-${personId}`;
   }
 
-  nodeRoleLabel(node: FamilyNetworkNode): string {
-    if (node.role === "focus") {
-      return "ЦЕНТР";
+  nodeGenerationLabel(node: FamilyNetworkNode): string {
+    return `ПОКОЛІННЯ ${toRomanNumeral(this.generationNumber(node))}`;
+  }
+
+  generationNumber(node: FamilyNetworkNode): number {
+    const diagram = this.diagram();
+
+    if (!diagram || diagram.nodes.length === 0) {
+      return 1;
     }
 
-    if (node.role === "ancestor") {
-      return "ВИЩЕ";
-    }
+    const minLevel = Math.min(...diagram.nodes.map((candidate) => candidate.level));
+    return node.level - minLevel + 1;
+  }
 
-    if (node.role === "descendant") {
-      return "НИЖЧЕ";
+  quickAddHeading(related: Person): string {
+    switch (this.selectedQuickAddAction()) {
+      case "father":
+        return `Додати батька до ${this.displayName(related)}`;
+      case "mother":
+        return `Додати матір до ${this.displayName(related)}`;
+      case "brother":
+        return `Додати брата для ${this.displayName(related)}`;
+      case "sister":
+        return `Додати сестру для ${this.displayName(related)}`;
+      case "son":
+        return `Додати сина до ${this.displayName(related)}`;
+      case "daughter":
+        return `Додати дочку до ${this.displayName(related)}`;
+      default:
+        return `Додати родича до ${this.displayName(related)}`;
     }
+  }
 
-    return "ТЕ САМЕ ПОКОЛІННЯ";
+  quickAddDescription(related: Person): string {
+    switch (this.selectedQuickAddAction()) {
+      case "father":
+      case "mother":
+        return `Введіть дані одного з батьків для ${this.displayName(related)}. Якщо ця людина вже є в мережі, оберіть її зі списку.`;
+      case "brother":
+      case "sister":
+        return `Введіть дані брата або сестри для ${this.displayName(related)}. Якщо ця людина вже є в мережі, оберіть її зі списку.`;
+      case "son":
+      case "daughter":
+        return `Введіть дані дитини для ${this.displayName(related)}. Якщо ця людина вже є в мережі, оберіть її зі списку.`;
+      default:
+        return `Введіть дані родича для ${this.displayName(related)}.`;
+    }
+  }
+
+  quickAddSummaryTitle(): string {
+    switch (this.selectedQuickAddAction()) {
+      case "father":
+        return "Буде додано батька";
+      case "mother":
+        return "Буде додано матір";
+      case "brother":
+        return "Буде додано брата";
+      case "sister":
+        return "Буде додано сестру";
+      case "son":
+        return "Буде додано сина";
+      case "daughter":
+        return "Буде додано дочку";
+      default:
+        return "Буде додано родича";
+    }
+  }
+
+  quickAddSummaryDescription(related: Person): string {
+    switch (this.selectedQuickAddAction()) {
+      case "father":
+      case "mother":
+        return `Після збереження ця людина стане одним із батьків для ${this.displayName(related)}.`;
+      case "brother":
+      case "sister":
+        return `Після збереження ця людина буде повʼязана з ${this.displayName(related)} як брат або сестра через спільних батьків.`;
+      case "son":
+      case "daughter":
+        return `Після збереження ця людина стане дитиною для ${this.displayName(related)}.`;
+      default:
+        return `Після збереження родича буде додано до ${this.displayName(related)}.`;
+    }
   }
 
   candidateMeta(person: Person): string {
@@ -903,14 +1226,75 @@ export class FamilyPublicPageComponent {
     return details.length > 0 ? details.join(" • ") : "Дата та місто народження не вказані";
   }
 
-  openJoinPanel(): void {
-    this.joinErrorMessage.set("");
-    this.isJoinPanelOpen.set(true);
+  closeBanner(): void {
+    this.isBannerVisible.set(false);
+  }
+
+  openQuickAddMenu(person: Person, event: MouseEvent): void {
+    event?.stopPropagation();
+    this.highlightedPersonId.set(person.id);
+    const currentTarget = event.currentTarget;
+
+    if (!(currentTarget instanceof SVGGraphicsElement)) {
+      return;
+    }
+
+    const rect = currentTarget.getBoundingClientRect();
+    this.quickAddMenu.set({
+      person,
+      centerX: rect.left + rect.width / 2,
+      centerY: rect.top + rect.height / 2,
+    });
+  }
+
+  closeQuickAddMenu(): void {
+    this.quickAddMenu.set(null);
   }
 
   closeJoinPanel(): void {
     this.isJoinPanelOpen.set(false);
     this.joinErrorMessage.set("");
+    this.selectedExistingCandidate.set(null);
+    this.selectedRelatedPerson.set(null);
+    this.selectedQuickAddAction.set(null);
+    this.joinForm.controls.relatedToQuery.setValue("", { emitEvent: false });
+  }
+
+  chooseQuickAddAction(action: PublicQuickAddAction): void {
+    const menu = this.quickAddMenu();
+
+    if (!menu) {
+      return;
+    }
+
+    if ((action === "brother" || action === "sister") && !this.canAddSibling(menu.person.id)) {
+      this.snackBar.open("Щоб додати брата або сестру, спочатку додайте хоча б одного з батьків цієї людини.", "Закрити", {
+        duration: 3400,
+      });
+      this.closeQuickAddMenu();
+      return;
+    }
+
+    this.selectedQuickAddAction.set(action);
+    this.selectedExistingCandidate.set(null);
+    this.selectedRelatedPerson.set(menu.person);
+    this.joinErrorMessage.set("");
+    this.joinForm.reset(
+      {
+        firstName: "",
+        lastName: "",
+        middleName: "",
+        maidenName: "",
+        birthDate: "",
+        birthPlace: "",
+        isLiving: "true",
+        relationKind: relationKindForQuickAddAction(action),
+        relatedToQuery: menu.person,
+      },
+      { emitEvent: false },
+    );
+    this.closeQuickAddMenu();
+    this.isJoinPanelOpen.set(true);
   }
 
   selectExistingCandidate(candidate: Person): void {
@@ -937,6 +1321,7 @@ export class FamilyPublicPageComponent {
 
   selfMatches(): Person[] {
     const persons = this.family()?.tree.persons ?? [];
+    const selectedTargetId = this.selectedRelatedPerson()?.id;
     const firstName = normalizeIdentityValue(this.joinForm.controls.firstName.value);
     const lastName = normalizeIdentityValue(this.joinForm.controls.lastName.value);
     const birthDate = this.joinForm.controls.birthDate.value.trim();
@@ -949,6 +1334,10 @@ export class FamilyPublicPageComponent {
     const similar: Person[] = [];
 
     for (const person of persons) {
+      if (person.id === selectedTargetId) {
+        continue;
+      }
+
       const personFirstName = normalizeIdentityValue(person.firstName);
       const personLastName = normalizeIdentityValue(person.lastName);
       const isNameMatch = personFirstName.includes(firstName) && personLastName.includes(lastName);
@@ -973,14 +1362,20 @@ export class FamilyPublicPageComponent {
 
   selfMatchPanelTitle(): string {
     return this.selfMatches().some((candidate) => this.isExactSelfMatch(candidate))
-      ? "Схоже, ви вже є в цій мережі родини"
+      ? "Схоже, ця людина вже є в цій мережі родини"
       : "Можливі збіги";
   }
 
   selfMatchPanelDescription(): string {
     return this.selfMatches().some((candidate) => this.isExactSelfMatch(candidate))
-      ? "Оберіть свій профіль зі списку, і ми просто підсвітимо вас у схемі."
-      : "Якщо бачите себе, оберіть профіль. Якщо ні, продовжуйте додавання як нова людина.";
+      ? "Оберіть профіль зі списку, і ми просто використаємо його без створення дубля."
+      : "Якщо бачите потрібну людину, оберіть її профіль. Якщо ні, продовжуйте додавання як нової людини.";
+  }
+
+  canAddSibling(personId: string): boolean {
+    return (this.family()?.tree.relationships ?? []).some(
+      (relationship) => relationship.type === "parent_child" && relationship.person2Id === personId,
+    );
   }
 
   isExactSelfMatch(candidate: Person): boolean {
@@ -1033,7 +1428,7 @@ export class FamilyPublicPageComponent {
   }
 
   joinSubmitLabel(): string {
-    return this.selectedExistingCandidate() ? "Показати мене в мережі" : "Додати себе до родини";
+    return this.selectedExistingCandidate() ? "Додати наявного родича" : "Додати родича";
   }
 
   async submitJoin(): Promise<void> {
@@ -1051,12 +1446,12 @@ export class FamilyPublicPageComponent {
     const exactMatchExists = this.selfMatches().some((candidate) => this.isExactSelfMatch(candidate));
 
     if (exactMatchExists && !this.selectedExistingCandidate()) {
-      this.joinErrorMessage.set("Ми вже бачимо вас у цій мережі родини. Оберіть свій профіль зі списку, щоб не створювати дубль.");
+      this.joinErrorMessage.set("Така людина вже є в цій мережі родини. Оберіть її профіль зі списку, щоб не створювати дубль.");
       return;
     }
 
     if (!this.selectedExistingCandidate() && !this.selectedRelatedPerson()) {
-      this.joinErrorMessage.set("Оберіть людину з мережі родини, до якої ви додаєтесь.");
+      this.joinErrorMessage.set("Спочатку натисніть на людину в схемі, до якої потрібно додати родича.");
       return;
     }
 
@@ -1071,10 +1466,10 @@ export class FamilyPublicPageComponent {
       await this.loadFamily(token, response.person.id);
       this.closeJoinPanel();
 
-      if (response.alreadyInTree) {
-        this.snackBar.open("Ви вже є в цій мережі родини. Показую ваш профіль у схемі.", "Закрити", { duration: 3000 });
-      } else if (response.usedExistingPerson) {
-        this.snackBar.open("Знайшли наявний профіль і під’єднали його до цієї мережі родини.", "Закрити", { duration: 3200 });
+      if (response.usedExistingPerson && response.relationship) {
+        this.snackBar.open("Знайшли наявний профіль і додали зв’язок у мережі родини.", "Закрити", { duration: 3200 });
+      } else if (response.alreadyInTree) {
+        this.snackBar.open("Ця людина вже є в цій мережі родини. Показую її профіль у схемі.", "Закрити", { duration: 3000 });
       } else {
         this.snackBar.open("Людину додано до мережі родини.", "Закрити", { duration: 3000 });
       }
@@ -1119,6 +1514,10 @@ export class FamilyPublicPageComponent {
     }
 
     if (event.button !== 0 || this.activePointers.size > 1) {
+      return;
+    }
+
+    if (isTreeNodeTarget(event.target)) {
       return;
     }
 
@@ -1214,23 +1613,26 @@ export class FamilyPublicPageComponent {
 
   private buildJoinPayload() {
     const selectedExistingCandidate = this.selectedExistingCandidate();
+    const related = this.selectedRelatedPerson();
+    const action = this.selectedQuickAddAction();
 
     if (selectedExistingCandidate) {
       return {
         existingPersonId: selectedExistingCandidate.id,
+        relatedToPersonId: related?.id ?? null,
+        relationKind: action ? relationKindForQuickAddAction(action) : this.joinForm.controls.relationKind.value,
       };
     }
 
-    const related = this.selectedRelatedPerson();
-
     return {
       relatedToPersonId: related?.id ?? null,
-      relationKind: this.joinForm.controls.relationKind.value,
+      relationKind: action ? relationKindForQuickAddAction(action) : this.joinForm.controls.relationKind.value,
       person: {
         firstName: this.joinForm.controls.firstName.value.trim(),
         lastName: this.joinForm.controls.lastName.value.trim(),
         middleName: emptyToNull(this.joinForm.controls.middleName.value),
         maidenName: emptyToNull(this.joinForm.controls.maidenName.value),
+        gender: genderForQuickAddAction(action),
         birthDate: this.joinForm.controls.birthDate.value.trim(),
         birthPlace: emptyToNull(this.joinForm.controls.birthPlace.value),
         isLiving: parseLivingValue(this.joinForm.controls.isLiving.value),
@@ -1467,6 +1869,69 @@ function clamp(value: number, min: number, max: number): number {
 function parseViewBoxOrigin(viewBox: string): [number, number] {
   const [minX = 0, minY = 0] = viewBox.split(/\s+/).map((value) => Number(value));
   return [minX, minY];
+}
+
+function isTreeNodeTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(".tree-node-group") !== null;
+}
+
+function relationKindForQuickAddAction(action: PublicQuickAddAction): PublicRelationKind | "sibling" {
+  switch (action) {
+    case "father":
+    case "mother":
+      return "parent";
+    case "brother":
+    case "sister":
+      return "sibling";
+    case "son":
+    case "daughter":
+      return "child";
+  }
+}
+
+function genderForQuickAddAction(action: PublicQuickAddAction | null): Person["gender"] {
+  switch (action) {
+    case "father":
+    case "brother":
+    case "son":
+      return "male";
+    case "mother":
+    case "sister":
+    case "daughter":
+      return "female";
+    default:
+      return "unknown";
+  }
+}
+
+function toRomanNumeral(value: number): string {
+  const romanParts: Array<[number, string]> = [
+    [1000, "M"],
+    [900, "CM"],
+    [500, "D"],
+    [400, "CD"],
+    [100, "C"],
+    [90, "XC"],
+    [50, "L"],
+    [40, "XL"],
+    [10, "X"],
+    [9, "IX"],
+    [5, "V"],
+    [4, "IV"],
+    [1, "I"],
+  ];
+
+  let remaining = Math.max(1, Math.floor(value));
+  let result = "";
+
+  for (const [arabic, roman] of romanParts) {
+    while (remaining >= arabic) {
+      result += roman;
+      remaining -= arabic;
+    }
+  }
+
+  return result;
 }
 
 function normalizeIdentityValue(value: string | null | undefined): string {
