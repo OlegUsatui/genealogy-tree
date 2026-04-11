@@ -280,10 +280,12 @@ import { SearchService } from "../services/search.service";
         justify-content: space-between;
         gap: 16px;
         flex-wrap: wrap;
+        min-width: 0;
       }
 
       .page-copy {
         max-width: 760px;
+        min-width: 0;
       }
 
       .eyebrow {
@@ -308,6 +310,7 @@ import { SearchService } from "../services/search.service";
 
       .add-person-button {
         min-height: 46px;
+        flex: 0 0 auto;
       }
 
       .mode-switch {
@@ -549,7 +552,16 @@ import { SearchService } from "../services/search.service";
 
       @media (max-width: 900px) {
         .page-header {
+          flex-direction: column;
           align-items: flex-start;
+        }
+
+        .page-copy {
+          max-width: none;
+        }
+
+        .add-person-button {
+          align-self: stretch;
         }
 
         .mode-switch {
@@ -558,6 +570,20 @@ import { SearchService } from "../services/search.service";
       }
 
       @media (max-width: 720px) {
+        .section-card {
+          padding: 18px 16px;
+        }
+
+        .page-copy h1 {
+          font-size: 28px;
+          line-height: 1.08;
+        }
+
+        .add-person-button {
+          width: 100%;
+          justify-content: center;
+        }
+
         .mode-pill {
           flex: 1 1 calc(50% - 4px);
           text-align: center;

@@ -2,7 +2,7 @@ import type { Person, PublicFamilyTreeResponse, PublicSelfAddResponse, TreeRespo
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ElementRef, ViewChild, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
@@ -12,6 +12,7 @@ import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { FamilySpacesService } from "../services/family-spaces.service";
+import { LoadingOverlayService } from "../services/loading-overlay.service";
 import { buildFamilyNetworkDiagram, type FamilyNetworkDiagram, type FamilyNetworkNode } from "./family-network-diagram";
 
 type LivingOption = "unknown" | "true" | "false";
@@ -209,6 +210,7 @@ type QuickAddMenuState = {
         <div
           #viewport
           class="diagram-scroll"
+          [class.diagram-scroll--with-banner]="familyTitle() && isBannerVisible()"
           [class.is-panning]="isPanning()"
           (wheel)="handleWheel($event)"
           (pointerdown)="startPan($event)"
@@ -800,6 +802,10 @@ type QuickAddMenuState = {
           linear-gradient(180deg, rgba(250, 252, 246, 0.98), rgba(238, 245, 235, 0.97) 58%, rgba(230, 238, 229, 0.97));
       }
 
+      .diagram-scroll--with-banner {
+        padding-top: 108px;
+      }
+
       .diagram-scroll::before {
         content: "";
         position: absolute;
@@ -955,6 +961,11 @@ type QuickAddMenuState = {
           left: 50% !important;
           top: 50% !important;
           transform: translate(-50%, -50%);
+          width: min(360px, calc(100vw - 28px));
+          height: auto;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
         }
 
         .quick-add-option--top-left,
@@ -963,16 +974,21 @@ type QuickAddMenuState = {
         .quick-add-option--right,
         .quick-add-option--bottom-left,
         .quick-add-option--bottom-right {
-          left: -90px;
-          min-width: 180px;
+          position: static;
+          left: auto;
+          top: auto;
+          min-width: 0;
+          width: 100%;
+          animation-delay: 0ms;
         }
 
-        .quick-add-option--top-left { top: -248px; }
-        .quick-add-option--top-right { top: -194px; }
-        .quick-add-option--left { top: -140px; }
-        .quick-add-option--right { top: -86px; }
-        .quick-add-option--bottom-left { top: 144px; }
-        .quick-add-option--bottom-right { top: 198px; }
+        .quick-add-target-card {
+          position: static;
+          left: auto;
+          top: auto;
+          width: 100%;
+          grid-column: 1 / -1;
+        }
 
         .field-grid {
           grid-template-columns: 1fr;
@@ -989,6 +1005,10 @@ type QuickAddMenuState = {
         .tree-page,
         .diagram-scroll {
           min-height: calc(100dvh - 146px);
+        }
+
+        .diagram-scroll--with-banner {
+          padding-top: 124px;
         }
 
         .diagram-canvas {
@@ -1015,6 +1035,7 @@ export class FamilyPublicPageComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   private readonly familySpacesService = inject(FamilySpacesService);
+  private readonly loadingOverlay = inject(LoadingOverlayService);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly isLoading = signal(false);
@@ -1077,6 +1098,21 @@ export class FamilyPublicPageComponent {
   } | null = null;
 
   constructor() {
+    effect(
+      () => {
+        if (this.isLoading()) {
+          this.loadingOverlay.show("family-public-page");
+        } else {
+          this.loadingOverlay.hide("family-public-page");
+        }
+      },
+      { allowSignalWrites: true },
+    );
+
+    this.destroyRef.onDestroy(() => {
+      this.loadingOverlay.hide("family-public-page");
+    });
+
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const token = params.get("token");
 
@@ -1495,7 +1531,7 @@ export class FamilyPublicPageComponent {
       return;
     }
 
-    const direction = event.deltaY > 0 ? 0.12 : -0.12;
+    const direction = event.deltaY > 0 ? -0.12 : 0.12;
     this.applyZoom(this.zoom() + direction, viewport, event.clientX, event.clientY);
   }
 

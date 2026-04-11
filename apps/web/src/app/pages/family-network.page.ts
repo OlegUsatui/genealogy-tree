@@ -2,7 +2,7 @@ import type { FamilyGraphResponse, Person, Relationship } from "@family-tree/sha
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ElementRef, ViewChild, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
@@ -10,6 +10,7 @@ import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { GraphService } from "../services/graph.service";
+import { LoadingOverlayService } from "../services/loading-overlay.service";
 
 const nodeWidth = 214;
 const nodeHeight = 186;
@@ -55,35 +56,8 @@ type NodeActionMenuState = {
   standalone: true,
   imports: [CommonModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
-    <section class="app-page page-stack network-page-shell">
-      <mat-card class="section-card shell-card">
-        <div class="page-header">
-          <div class="page-copy">
-            <p class="eyebrow">Мережа родини</p>
-            <h1>Уся родина в одному великому дереві</h1>
-            <p class="muted">
-              Це не окремі кільця навколо людини, а повний деревоподібний вигляд усіх пов’язаних родичів:
-              покоління вище, нижче і на тому самому рівні.
-            </p>
-          </div>
-
-          <div class="header-actions" *ngIf="focusPersonId() as focusPersonId">
-            <a mat-stroked-button [routerLink]="['/persons', focusPersonId]">Профіль</a>
-            <a mat-flat-button color="primary" [routerLink]="['/tree', focusPersonId]">Родовід</a>
-          </div>
-        </div>
-
-        <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
-        <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
-
-        <div class="network-meta" *ngIf="!isLoading() && !errorMessage() && nodes().length > 0">
-          <div class="counter-pill">{{ nodes().length }} людей</div>
-          <div class="counter-pill">{{ links().length }} зв’язків</div>
-          <div class="counter-pill">Усі покоління</div>
-        </div>
-      </mat-card>
-
-      <mat-card class="section-card network-card" *ngIf="nodes().length > 0; else emptyState">
+    <section class="network-page-shell">
+      <div class="network-card">
         <div class="node-action-backdrop" *ngIf="nodeActionMenu()" (click)="closeNodeActionMenu()"></div>
         <div
           class="node-action-menu"
@@ -108,6 +82,11 @@ type NodeActionMenuState = {
           <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'spouses')">
             Додати партнера / партнерку
           </button>
+        </div>
+
+        <div class="network-status" *ngIf="isLoading() || errorMessage()">
+          <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
+          <p class="error-text network-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
         </div>
 
         <div
@@ -152,7 +131,7 @@ type NodeActionMenuState = {
               [class.same-level-node]="node.role === 'same'"
               [class.node-action-open]="nodeActionMenu()?.personId === node.person.id"
               [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
-              (click)="openPerson(node.person.id)"
+              (click)="openNodeActionMenu(node.person.id, $event)"
               (contextmenu)="openNodeActionMenu(node.person.id, $event)"
             >
               <rect
@@ -215,66 +194,64 @@ type NodeActionMenuState = {
           </svg>
           </div>
         </div>
-      </mat-card>
-
-      <ng-template #emptyState>
-        <mat-card class="section-card shell-card">
-          <div class="empty-state">
+        <div class="empty-state network-empty-state" *ngIf="!isLoading() && !errorMessage() && nodes().length === 0">
+          <div class="network-empty-card">
             <h3>Немає даних для побудови мережі</h3>
             <p class="muted">Для цієї людини ще не знайдено достатньо зв’язків, щоб показати всю родину.</p>
           </div>
-        </mat-card>
-      </ng-template>
+        </div>
+      </div>
     </section>
   `,
   styles: [
     `
-      .page-stack {
+      :host {
         display: flex;
-        flex-direction: column;
-        gap: 16px;
+        flex: 1 1 auto;
+        min-height: 0;
       }
 
       .network-page-shell {
+        position: relative;
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
         width: 100%;
-        max-width: none;
-      }
-
-      .section-card {
-        padding: clamp(18px, 2.2vw, 24px);
-      }
-
-      .page-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      .page-copy h1 {
-        margin: 0 0 8px;
-      }
-
-      .page-copy p {
-        margin: 0;
-      }
-
-      .header-actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-
-      .network-meta {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-top: 16px;
       }
 
       .network-card {
         position: relative;
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
         overflow: hidden;
+      }
+
+      .network-status {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        right: 18px;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+      }
+
+      .network-status > * {
+        pointer-events: auto;
+      }
+
+      .network-error {
+        align-self: flex-start;
+        margin: 0;
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: rgba(255, 248, 248, 0.94);
+        border: 1px solid rgba(196, 114, 114, 0.18);
+        box-shadow: 0 10px 30px rgba(29, 38, 47, 0.08);
       }
 
       .node-action-backdrop {
@@ -307,10 +284,11 @@ type NodeActionMenuState = {
 
       .network-canvas {
         position: relative;
+        display: flex;
+        flex: 1 1 auto;
         width: 100%;
-        min-height: 72dvh;
+        min-height: 0;
         overflow: hidden;
-        border-radius: 22px;
         cursor: grab;
         touch-action: none;
         user-select: none;
@@ -327,8 +305,9 @@ type NodeActionMenuState = {
 
       .network-scene {
         position: relative;
+        flex: 1 1 auto;
         width: 100%;
-        min-height: 72dvh;
+        min-height: 0;
       }
 
       .network-svg {
@@ -415,6 +394,26 @@ type NodeActionMenuState = {
         fill: #234261;
       }
 
+      .network-empty-state {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        pointer-events: none;
+      }
+
+      .network-empty-card {
+        width: min(520px, calc(100% - 32px));
+        padding: 32px 24px;
+        border-radius: 24px;
+        background: rgba(248, 252, 255, 0.94);
+        box-shadow: var(--shadow);
+        text-align: center;
+      }
+
       .empty-state h3 {
         margin: 0 0 8px;
       }
@@ -424,12 +423,19 @@ type NodeActionMenuState = {
       }
 
       @media (max-width: 760px) {
-        .page-header {
-          flex-direction: column;
+        .node-action-menu {
+          width: min(calc(100vw - 28px), 320px);
         }
 
-        .header-actions {
+        .node-action-menu > .mat-mdc-button-base {
           width: 100%;
+          justify-content: center;
+        }
+
+        .network-status {
+          top: 14px;
+          left: 14px;
+          right: 14px;
         }
       }
     `,
@@ -443,6 +449,7 @@ export class FamilyNetworkPageComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly graphService = inject(GraphService);
+  private readonly loadingOverlay = inject(LoadingOverlayService);
 
   readonly isLoading = signal(false);
   readonly errorMessage = signal("");
@@ -479,6 +486,21 @@ export class FamilyNetworkPageComponent {
   private suppressNodeClick = false;
 
   constructor() {
+    effect(
+      () => {
+        if (this.isLoading()) {
+          this.loadingOverlay.show("family-network-page");
+        } else {
+          this.loadingOverlay.hide("family-network-page");
+        }
+      },
+      { allowSignalWrites: true },
+    );
+
+    this.destroyRef.onDestroy(() => {
+      this.loadingOverlay.hide("family-network-page");
+    });
+
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const personId = params.get("personId");
 
@@ -575,6 +597,11 @@ export class FamilyNetworkPageComponent {
       return;
     }
 
+    if (this.nodeActionMenu()?.personId === personId) {
+      this.closeNodeActionMenu();
+      return;
+    }
+
     const currentTarget = event.currentTarget;
 
     if (!(currentTarget instanceof SVGGraphicsElement)) {
@@ -582,9 +609,24 @@ export class FamilyNetworkPageComponent {
     }
 
     const rect = currentTarget.getBoundingClientRect();
-    const menuWidth = 232;
-    const menuHeight = 272;
     const viewportMargin = 16;
+    const compactViewport = window.innerWidth <= 760;
+    const menuWidth = compactViewport ? Math.min(window.innerWidth - viewportMargin * 2, 320) : 232;
+    const menuHeight = 272;
+
+    if (compactViewport) {
+      this.nodeActionMenu.set({
+        personId,
+        left: Math.max(viewportMargin, (window.innerWidth - menuWidth) / 2),
+        top: clamp(
+          window.innerHeight / 2 - menuHeight / 2,
+          viewportMargin,
+          window.innerHeight - menuHeight - viewportMargin,
+        ),
+      });
+      return;
+    }
+
     const preferredLeft = rect.right + 12;
     const fallbackLeft = rect.left - menuWidth - 12;
     const left = preferredLeft + menuWidth + viewportMargin <= window.innerWidth
@@ -615,7 +657,7 @@ export class FamilyNetworkPageComponent {
       return;
     }
 
-    const direction = event.deltaY > 0 ? 0.12 : -0.12;
+    const direction = event.deltaY > 0 ? -0.12 : 0.12;
     this.applyZoom(this.zoom() + direction, viewport, event.clientX, event.clientY);
   }
 

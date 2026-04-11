@@ -131,4 +131,9 @@ a {
     gap: 4px;
     min-height: 46px;
   }
+
+  .mobile-brand .mdc-button__label {
+    align-items: center;
+    min-height: 56px;
+  }
 }

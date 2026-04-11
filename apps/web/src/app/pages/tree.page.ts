@@ -2,7 +2,7 @@ import type { FamilyShareLinkResponse, Person, TreeResponse } from "@family-tree
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ElementRef, ViewChild, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatSnackBar } from "@angular/material/snack-bar";
@@ -12,6 +12,7 @@ import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
 import { awaitOne } from "../services/await-one";
 import { FamilySpacesService } from "../services/family-spaces.service";
+import { LoadingOverlayService } from "../services/loading-overlay.service";
 import { PersonsService } from "../services/persons.service";
 import { TreeService } from "../services/tree.service";
 import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree-diagram";
@@ -20,89 +21,90 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
   standalone: true,
   imports: [CommonModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
-    <ng-container *ngIf="diagram() as diagram; else emptyState">
-      <section class="tree-page">
-        <div class="tree-hud" *ngIf="isLoading() || errorMessage() || rootPersonId()">
-          <div class="tree-hud-actions" *ngIf="rootPersonId()">
-            <a mat-stroked-button [routerLink]="['/graph', rootPersonId()]">
-              Мережа родини
-            </a>
-            <button
-              mat-flat-button
-              color="primary"
-              type="button"
-              [disabled]="isGeneratingShareLink()"
-              (click)="generateShareLink()"
-            >
-              {{ isGeneratingShareLink() ? "Створюю посилання..." : "Поділитися сім’єю" }}
+    <section class="tree-page">
+      <div class="tree-hud" *ngIf="isLoading() || errorMessage() || rootPersonId()">
+        <div class="tree-hud-actions" *ngIf="rootPersonId()">
+          <a mat-stroked-button [routerLink]="['/graph', rootPersonId()]">
+            Мережа родини
+          </a>
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            [disabled]="isGeneratingShareLink()"
+            (click)="generateShareLink()"
+          >
+            {{ isGeneratingShareLink() ? "Створюю посилання..." : "Поділитися сім’єю" }}
+          </button>
+        </div>
+
+        <div class="share-card" *ngIf="shareLink() as shareLink">
+          <div class="share-card-header">
+            <div class="share-card-copy">
+              <strong>Публічне посилання на мережу родини</strong>
+              <p class="muted">
+                Надішліть його родичу. Він зможе переглянути всю мережу родини і додати себе без реєстрації.
+              </p>
+            </div>
+
+            <button type="button" class="share-card-close" aria-label="Закрити посилання" (click)="closeShareLink()">
+              <span aria-hidden="true">×</span>
             </button>
           </div>
 
-          <div class="share-card" *ngIf="shareLink() as shareLink">
-            <div class="share-card-header">
-              <div class="share-card-copy">
-                <strong>Публічне посилання на мережу родини</strong>
-                <p class="muted">
-                  Надішліть його родичу. Він зможе переглянути всю мережу родини і додати себе без реєстрації.
-                </p>
-              </div>
-
-              <button type="button" class="share-card-close" aria-label="Закрити посилання" (click)="closeShareLink()">
-                <span aria-hidden="true">×</span>
-              </button>
-            </div>
-
-            <div class="share-card-row">
-              <input class="share-link-input" [value]="shareLink" readonly (focus)="$any($event.target).select()">
-              <button mat-stroked-button type="button" (click)="copyShareLink()">Копіювати</button>
-            </div>
+          <div class="share-card-row">
+            <input class="share-link-input" [value]="shareLink" readonly (focus)="$any($event.target).select()">
+            <button mat-stroked-button type="button" (click)="copyShareLink()">Копіювати</button>
           </div>
-
-          <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
-          <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
         </div>
 
-        <div class="node-action-backdrop" *ngIf="nodeActionMenu()" (click)="closeNodeActionMenu()"></div>
-        <div
-          class="node-action-menu"
-          *ngIf="nodeActionMenu() as menu"
-          [style.left.px]="menu.left"
-          [style.top.px]="menu.top"
-          (click)="$event.stopPropagation()"
-        >
-          <button mat-flat-button color="primary" type="button" (click)="openPersonProfile(menu.personId)">
-            Профіль
-          </button>
-          <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
-            Дерево
-          </button>
-          <button mat-stroked-button type="button" (click)="openPersonGraph(menu.personId)">
-            Мережа
-          </button>
-          <div class="node-action-divider"></div>
-          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'parents')">
-            Додати батька / матір
-          </button>
-          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'children')">
-            Додати дитину
-          </button>
-          <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'spouses')">
-            Додати партнера / партнерку
-          </button>
-        </div>
+        <mat-progress-bar *ngIf="isLoading()" mode="indeterminate"></mat-progress-bar>
+        <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+      </div>
 
-        <div
-          #viewport
-          class="diagram-scroll"
-          [class.is-panning]="isPanning()"
-          (wheel)="handleWheel($event)"
-          (pointerdown)="startPan($event)"
-          (pointermove)="movePan($event)"
-          (pointerup)="endPan($event)"
-          (pointercancel)="endPan($event)"
-          (pointerleave)="endPan($event)"
-        >
-          <div class="diagram-canvas">
+      <div class="node-action-backdrop" *ngIf="nodeActionMenu()" (click)="closeNodeActionMenu()"></div>
+      <div
+        class="node-action-menu"
+        *ngIf="nodeActionMenu() as menu"
+        [style.left.px]="menu.left"
+        [style.top.px]="menu.top"
+        (click)="$event.stopPropagation()"
+      >
+        <button mat-flat-button color="primary" type="button" (click)="openPersonProfile(menu.personId)">
+          Профіль
+        </button>
+        <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
+          Дерево
+        </button>
+        <button mat-stroked-button type="button" (click)="openPersonGraph(menu.personId)">
+          Мережа
+        </button>
+        <div class="node-action-divider"></div>
+        <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'parents')">
+          Додати батька / матір
+        </button>
+        <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'children')">
+          Додати дитину
+        </button>
+        <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'spouses')">
+          Додати партнера / партнерку
+        </button>
+      </div>
+
+      <div
+        #viewport
+        class="diagram-scroll"
+        [class.diagram-scroll--with-share]="!!shareLink()"
+        [class.is-panning]="isPanning()"
+        (wheel)="handleWheel($event)"
+        (pointerdown)="startPan($event)"
+        (pointermove)="movePan($event)"
+        (pointerup)="endPan($event)"
+        (pointercancel)="endPan($event)"
+        (pointerleave)="endPan($event)"
+      >
+        <div class="diagram-canvas">
+          <ng-container *ngIf="diagram() as diagram">
             <svg
               class="tree-svg"
               [attr.viewBox]="diagram.viewBox"
@@ -191,23 +193,31 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
                 </text>
               </g>
             </svg>
+          </ng-container>
+
+          <div class="empty-state tree-empty-state tree-empty-state--overlay" *ngIf="!isLoading() && !diagram() && !errorMessage()">
+            Немає достатньо даних для побудови дерева.
           </div>
         </div>
-      </section>
-    </ng-container>
-
-    <ng-template #emptyState>
-      <section class="tree-page tree-page--empty">
-        <div class="empty-state tree-empty-state">Немає достатньо даних для побудови дерева.</div>
-      </section>
-    </ng-template>
+      </div>
+    </section>
   `,
   styles: [
     `
+      :host {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+
       .tree-page {
         position: relative;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
         width: 100%;
-        min-height: calc(100dvh - 88px);
+        min-height: 0;
       }
 
       .tree-page--empty {
@@ -365,11 +375,21 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         box-shadow: var(--shadow);
       }
 
+      .tree-empty-state--overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2;
+      }
+
       .diagram-scroll {
         position: relative;
+        display: flex;
+        flex: 1 1 auto;
         overflow: hidden;
         width: 100%;
-        min-height: calc(100dvh - 88px);
+        min-height: 0;
         cursor: grab;
         touch-action: none;
         user-select: none;
@@ -378,6 +398,10 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
           radial-gradient(circle at 18% 18%, rgba(157, 201, 125, 0.16), transparent 18%),
           radial-gradient(circle at 82% 16%, rgba(190, 218, 150, 0.18), transparent 18%),
           linear-gradient(180deg, rgba(250, 252, 246, 0.98), rgba(238, 245, 235, 0.97) 58%, rgba(230, 238, 229, 0.97));
+      }
+
+      .diagram-scroll--with-share {
+        padding-top: 158px;
       }
 
       .diagram-scroll::before {
@@ -410,9 +434,10 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
 
       .diagram-canvas {
         position: relative;
+        flex: 1 1 auto;
         z-index: 1;
         width: 100%;
-        min-height: calc(100dvh - 88px);
+        min-height: 0;
       }
 
       .tree-svg {
@@ -509,11 +534,15 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
       @media (max-width: 720px) {
         .tree-page,
         .diagram-scroll {
-          min-height: calc(100dvh - 146px);
+          min-height: 0;
+        }
+
+        .diagram-scroll--with-share {
+          padding-top: 220px;
         }
 
         .diagram-canvas {
-          min-height: calc(100dvh - 146px);
+          min-height: 0;
         }
 
         .tree-hud {
@@ -549,6 +578,7 @@ export class TreePageComponent {
   private readonly personsService = inject(PersonsService);
   private readonly authService = inject(AuthService);
   private readonly familySpacesService = inject(FamilySpacesService);
+  private readonly loadingOverlay = inject(LoadingOverlayService);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly errorMessage = signal("");
@@ -586,6 +616,21 @@ export class TreePageComponent {
   private suppressNodeClick = false;
 
   constructor() {
+    effect(
+      () => {
+        if (this.isLoading()) {
+          this.loadingOverlay.show("tree-page");
+        } else {
+          this.loadingOverlay.hide("tree-page");
+        }
+      },
+      { allowSignalWrites: true },
+    );
+
+    this.destroyRef.onDestroy(() => {
+      this.loadingOverlay.hide("tree-page");
+    });
+
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const personId = params.get("personId");
 
@@ -777,7 +822,7 @@ export class TreePageComponent {
       return;
     }
 
-    const direction = event.deltaY > 0 ? 0.12 : -0.12;
+    const direction = event.deltaY > 0 ? -0.12 : 0.12;
     this.applyZoom(this.zoom() + direction, viewport, event.clientX, event.clientY);
   }
 

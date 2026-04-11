@@ -5,6 +5,7 @@ import { Router } from "@angular/router";
 
 import { ApiService } from "./api.service";
 import { awaitOne } from "./await-one";
+import { LoadingOverlayService } from "./loading-overlay.service";
 
 @Injectable({
   providedIn: "root",
@@ -12,6 +13,7 @@ import { awaitOne } from "./await-one";
 export class AuthService {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly loadingOverlay = inject(LoadingOverlayService);
 
   readonly user = signal<SessionUser | null>(null);
   readonly loaded = signal(false);
@@ -21,6 +23,8 @@ export class AuthService {
       return;
     }
 
+    this.loadingOverlay.show("auth-restore");
+
     try {
       const response = await awaitOne<AuthMeResponse>(this.api.get<AuthMeResponse>("/auth/me"));
       this.user.set(response.user);
@@ -28,6 +32,7 @@ export class AuthService {
       this.user.set(null);
     } finally {
       this.loaded.set(true);
+      this.loadingOverlay.hide("auth-restore");
     }
   }
 

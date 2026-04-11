@@ -3,10 +3,11 @@ import type { Person } from "@family-tree/shared";
 import { CommonModule } from "@angular/common";
 import { Component, DestroyRef, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
+import { NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 
 import { MATERIAL_IMPORTS } from "./material";
 import { AuthService } from "./services/auth.service";
+import { LoadingOverlayService } from "./services/loading-overlay.service";
 import { awaitOne } from "./services/await-one";
 import { PersonsService } from "./services/persons.service";
 
@@ -15,7 +16,7 @@ import { PersonsService } from "./services/persons.service";
   standalone: true,
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, ...MATERIAL_IMPORTS],
   template: `
-    <mat-toolbar class="shell-toolbar">
+    <header class="shell-toolbar">
       <div class="desktop-header">
         <a mat-button routerLink="/" class="brand-link desktop-brand" aria-label="Родинне дерево">
           <span class="brand-mark" aria-hidden="true">
@@ -97,7 +98,7 @@ import { PersonsService } from "./services/persons.service";
           </span>
         </button>
       </div>
-    </mat-toolbar>
+    </header>
 
     <div class="mobile-overlay" [class.is-open]="isMobileMenuOpen()" (click)="closeMobileMenu()">
       <div class="mobile-overlay-backdrop"></div>
@@ -153,12 +154,107 @@ import { PersonsService } from "./services/persons.service";
       </aside>
       </div>
 
-    <main>
+    <main class="shell-main">
       <router-outlet></router-outlet>
     </main>
+
+    <div *ngIf="loadingOverlay.active()" class="app-loader-overlay">
+      <div class="app-loader-content" role="status" aria-live="polite" aria-label="Завантаження">
+        <div class="app-loader-glow" aria-hidden="true"></div>
+        <img class="app-loader-tree" src="/tree-loader.svg" alt="" width="220" height="220" aria-hidden="true">
+        <div class="app-loader-shadow" aria-hidden="true"></div>
+      </div>
+    </div>
   `,
   styles: [
     `
+      :host {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+        height: 100dvh;
+      }
+
+      .shell-main {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        flex-direction: column;
+        padding-top: 14px;
+        box-sizing: border-box;
+      }
+
+      .shell-main > router-outlet {
+        display: block;
+        flex: 0 0 auto;
+        min-height: 0;
+      }
+
+      .shell-main > router-outlet + * {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+      }
+
+      .app-loader-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1400;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(15, 20, 24, 0.58);
+        backdrop-filter: blur(8px);
+      }
+
+      .app-loader-content {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: min(280px, calc(100vw - 48px));
+        aspect-ratio: 1;
+      }
+
+      .app-loader-glow {
+        position: absolute;
+        inset: 18% 18% 24%;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(166, 213, 139, 0.35), rgba(166, 213, 139, 0));
+        filter: blur(10px);
+        animation: loader-glow 1.7s ease-in-out infinite alternate;
+      }
+
+      .app-loader-tree {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: auto;
+        display: block;
+        transform-origin: 50% 86%;
+        animation:
+          loader-float 1.8s ease-in-out infinite,
+          loader-sway 2.6s ease-in-out infinite;
+        filter: drop-shadow(0 16px 36px rgba(8, 14, 20, 0.22));
+        user-select: none;
+        pointer-events: none;
+      }
+
+      .app-loader-shadow {
+        position: absolute;
+        bottom: 10%;
+        left: 50%;
+        width: 44%;
+        height: 10%;
+        border-radius: 999px;
+        background: rgba(8, 14, 20, 0.32);
+        transform: translateX(-50%);
+        filter: blur(8px);
+        animation: loader-shadow 1.8s ease-in-out infinite;
+      }
+
       .shell-toolbar {
         position: sticky;
         top: 0;
@@ -167,8 +263,7 @@ import { PersonsService } from "./services/persons.service";
         flex-direction: column;
         align-items: stretch;
         gap: 10px;
-        height: auto !important;
-        min-height: 0 !important;
+        min-height: 76px;
         overflow: visible;
         white-space: normal;
         backdrop-filter: blur(18px);
@@ -328,6 +423,55 @@ import { PersonsService } from "./services/persons.service";
         color: var(--accent) !important;
       }
 
+      @keyframes loader-float {
+        0%,
+        100% {
+          translate: 0 6px;
+        }
+
+        50% {
+          translate: 0 -2px;
+        }
+      }
+
+      @keyframes loader-sway {
+        0%,
+        100% {
+          rotate: -7deg;
+          scale: 0.98;
+        }
+
+        50% {
+          rotate: 7deg;
+          scale: 1;
+        }
+      }
+
+      @keyframes loader-shadow {
+        0%,
+        100% {
+          transform: translateX(-50%) scaleX(0.92);
+          opacity: 0.34;
+        }
+
+        50% {
+          transform: translateX(-50%) scaleX(1);
+          opacity: 0.2;
+        }
+      }
+
+      @keyframes loader-glow {
+        0% {
+          opacity: 0.65;
+          scale: 0.95;
+        }
+
+        100% {
+          opacity: 1;
+          scale: 1.08;
+        }
+      }
+
       @media (max-width: 960px) {
         .brand-link {
           font-size: 22px;
@@ -352,6 +496,12 @@ import { PersonsService } from "./services/persons.service";
       }
 
       @media (max-width: 900px) {
+        .shell-toolbar {
+          min-height: 88px;
+          padding-top: 14px;
+          padding-bottom: 14px;
+        }
+
         .desktop-header {
           display: none;
         }
@@ -361,11 +511,15 @@ import { PersonsService } from "./services/persons.service";
           align-items: center;
           justify-content: space-between;
           gap: 12px;
+          min-height: 56px;
           min-width: 0;
         }
 
         .mobile-brand {
           min-width: 0;
+          max-width: calc(100% - 58px);
+          min-height: 56px;
+          align-items: center;
         }
 
         .menu-toggle {
@@ -530,13 +684,41 @@ import { PersonsService } from "./services/persons.service";
       }
 
       @media (max-width: 640px) {
+        .shell-toolbar {
+          min-height: 84px;
+        }
+
+        .shell-main {
+          padding-top: 10px;
+        }
+
+        .app-loader-overlay {
+          padding: 16px;
+        }
+
+        .app-loader-content {
+          width: min(220px, calc(100vw - 32px));
+        }
+
         .brand-wordmark {
+          min-height: 46px;
           white-space: normal;
-          line-height: 1.05;
+          line-height: 1.1;
+          overflow-wrap: anywhere;
         }
 
         .brand-link {
           font-size: 20px;
+          min-height: 56px;
+          align-items: center;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .app-loader-glow,
+        .app-loader-tree,
+        .app-loader-shadow {
+          animation: none;
         }
       }
     `,
@@ -547,6 +729,7 @@ export class AppComponent {
   private readonly personsService = inject(PersonsService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly loadingOverlay = inject(LoadingOverlayService);
   private profileLoadToken = 0;
 
   protected readonly accountDisplayName = signal("Мій профіль");
@@ -581,8 +764,17 @@ export class AppComponent {
     });
 
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
+      if (event instanceof NavigationStart) {
+        this.loadingOverlay.show("router-navigation");
+      }
+
       if (event instanceof NavigationEnd) {
+        this.loadingOverlay.hide("router-navigation");
         this.isMobileMenuOpen.set(false);
+      }
+
+      if (event instanceof NavigationCancel || event instanceof NavigationError) {
+        this.loadingOverlay.hide("router-navigation");
       }
     });
   }
