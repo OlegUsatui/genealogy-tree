@@ -1,15 +1,17 @@
 import type {
   CreateRelationshipDto,
   Person,
+  PersonSearchCandidate,
   Relationship,
   RelationshipDirection,
 } from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, DestroyRef, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ViewChild, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
+import { MatAutocompleteTrigger } from "@angular/material/autocomplete";
 import { MatSnackBar } from "@angular/material/snack-bar";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
@@ -18,6 +20,7 @@ import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { PersonsService } from "../services/persons.service";
 import { RelationshipsService } from "../services/relationships.service";
+import { SearchService } from "../services/search.service";
 
 @Component({
   standalone: true,
@@ -220,6 +223,12 @@ import { RelationshipsService } from "../services/relationships.service";
                 <mat-autocomplete #relationshipAutocomplete="matAutocomplete" (optionSelected)="selectRelationshipCandidate($event.option.value)">
                   <mat-option *ngFor="let candidate of filteredRelationshipCandidates()" [value]="candidate.id">
                     {{ displayName(candidate) }}
+                  </mat-option>
+                  <mat-option *ngIf="isSearchingRelationshipCandidates()" disabled>
+                    Шукаю людей...
+                  </mat-option>
+                  <mat-option *ngIf="showRelationshipSearchEmptyState()" disabled>
+                    Нічого не знайдено
                   </mat-option>
                 </mat-autocomplete>
               </mat-form-field>
@@ -679,12 +688,17 @@ import { RelationshipsService } from "../services/relationships.service";
   ],
 })
 export class PersonDetailsPageComponent {
+  @ViewChild(MatAutocompleteTrigger) private relationshipAutocompleteTrigger?: MatAutocompleteTrigger;
+
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly personsService = inject(PersonsService);
   private readonly relationshipsService = inject(RelationshipsService);
+  private readonly searchService = inject(SearchService);
   private readonly snackBar = inject(MatSnackBar);
+  private relationshipSearchDebounceId: ReturnType<typeof setTimeout> | null = null;
+  private latestRelationshipSearchToken = 0;
 
   readonly person = signal<Person | null>(null);
   readonly allPersons = signal<Person[]>([]);
@@ -695,6 +709,8 @@ export class PersonDetailsPageComponent {
   readonly draggedRelationshipId = signal<string | null>(null);
   readonly activeDropGroup = signal<RelationshipGroup | null>(null);
   readonly relationshipModalGroup = signal<RelationshipGroup | null>(null);
+  readonly relationshipSearchResults = signal<Person[]>([]);
+  readonly isSearchingRelationshipCandidates = signal(false);
 
   readonly relationshipForm = new FormGroup({
     type: new FormControl<Relationship["type"]>("parent_child", {
@@ -716,6 +732,10 @@ export class PersonDetailsPageComponent {
   });
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.clearRelationshipSearchDebounce();
+    });
+
     this.relationshipForm.controls.type.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((type) => {
       if (type !== "spouse") {
         this.relationshipForm.patchValue({
@@ -735,6 +755,42 @@ export class PersonDetailsPageComponent {
   }
 
   relationshipCandidates(): Person[] {
+    const candidatesById = new Map<string, Person>();
+
+    for (const candidate of this.localRelationshipCandidates()) {
+      candidatesById.set(candidate.id, candidate);
+    }
+
+    for (const candidate of this.relationshipSearchResults()) {
+      if (!candidatesById.has(candidate.id)) {
+        candidatesById.set(candidate.id, candidate);
+      }
+    }
+
+    return [...candidatesById.values()];
+  }
+
+  filteredRelationshipCandidates(): Person[] {
+    const query = this.relationshipForm.controls.relatedPersonQuery.value.trim().toLocaleLowerCase("uk");
+
+    if (!query) {
+      return this.localRelationshipCandidates();
+    }
+
+    if (query.length < 3) {
+      return this.filterRelationshipCandidates(this.localRelationshipCandidates(), query);
+    }
+
+    return this.relationshipSearchResults();
+  }
+
+  showRelationshipSearchEmptyState(): boolean {
+    const query = this.relationshipForm.controls.relatedPersonQuery.value.trim();
+
+    return query.length >= 3 && !this.isSearchingRelationshipCandidates() && this.filteredRelationshipCandidates().length === 0;
+  }
+
+  private localRelationshipCandidates(): Person[] {
     const currentId = this.person()?.id;
 
     if (this.isOwnProfile()) {
@@ -742,29 +798,6 @@ export class PersonDetailsPageComponent {
     }
 
     return this.allPersons().filter((candidate) => candidate.id !== currentId && candidate.canEdit === true);
-  }
-
-  filteredRelationshipCandidates(): Person[] {
-    const query = this.relationshipForm.controls.relatedPersonQuery.value.trim().toLocaleLowerCase("uk");
-    const candidates = this.relationshipCandidates();
-
-    if (!query) {
-      return candidates;
-    }
-
-    return candidates.filter((candidate) => {
-      const haystack = [
-        candidate.firstName,
-        candidate.middleName,
-        candidate.lastName,
-        candidate.maidenName,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("uk");
-
-      return haystack.includes(query);
-    });
   }
 
   selectedRelationshipGroup(): RelationshipGroup {
@@ -1090,14 +1123,12 @@ export class PersonDetailsPageComponent {
     const input = event.target instanceof HTMLInputElement ? event.target.value : "";
     const selectedCandidate = this.selectedRelationshipCandidate();
 
-    if (!selectedCandidate) {
+    if (!selectedCandidate || input !== this.displayName(selectedCandidate)) {
       this.relationshipForm.controls.relatedPersonId.setValue("");
-      return;
     }
 
-    if (input !== this.displayName(selectedCandidate)) {
-      this.relationshipForm.controls.relatedPersonId.setValue("");
-    }
+    this.scheduleRelationshipSearch(input);
+    this.syncRelationshipAutocompletePanel();
   }
 
   selectRelationshipCandidate(personId: string): void {
@@ -1112,6 +1143,7 @@ export class PersonDetailsPageComponent {
       relatedPersonId: candidate.id,
       relatedPersonQuery: this.displayName(candidate),
     });
+    this.relationshipAutocompleteTrigger?.closePanel();
   }
 
   async deletePerson(): Promise<void> {
@@ -1160,6 +1192,7 @@ export class PersonDetailsPageComponent {
   }
 
   private resetRelationshipForm(): void {
+    this.resetRelationshipSearch();
     this.relationshipForm.reset({
       type: "parent_child",
       direction: "current_is_child",
@@ -1203,6 +1236,143 @@ export class PersonDetailsPageComponent {
     }
 
     return this.relationshipCandidates().find((candidate) => candidate.id === relatedPersonId) ?? null;
+  }
+
+  private filterRelationshipCandidates(candidates: Person[], query: string): Person[] {
+    return candidates.filter((candidate) => {
+      const haystack = [
+        candidate.firstName,
+        candidate.middleName,
+        candidate.lastName,
+        candidate.maidenName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("uk");
+
+      return haystack.includes(query);
+    });
+  }
+
+  private scheduleRelationshipSearch(input: string): void {
+    const query = input.trim();
+
+    this.clearRelationshipSearchDebounce();
+
+    if (query.length < 3) {
+      this.latestRelationshipSearchToken += 1;
+      this.isSearchingRelationshipCandidates.set(false);
+      this.relationshipSearchResults.set([]);
+      this.syncRelationshipAutocompletePanel();
+      return;
+    }
+
+    const token = ++this.latestRelationshipSearchToken;
+    this.isSearchingRelationshipCandidates.set(true);
+    this.relationshipSearchResults.set([]);
+    this.syncRelationshipAutocompletePanel();
+    this.relationshipSearchDebounceId = setTimeout(() => {
+      void this.loadRelationshipSearchResults(query, token);
+    }, 250);
+  }
+
+  private async loadRelationshipSearchResults(query: string, token: number): Promise<void> {
+    try {
+      const candidates = await awaitOne<PersonSearchCandidate[]>(this.searchService.search(query));
+
+      if (token !== this.latestRelationshipSearchToken) {
+        return;
+      }
+
+      const allowedIds = this.isOwnProfile()
+        ? null
+        : new Set(this.localRelationshipCandidates().map((candidate) => candidate.id));
+
+      const results = candidates
+        .map((candidate) => this.mapSearchCandidateToPerson(candidate))
+        .filter((candidate) => candidate.id !== this.person()?.id)
+        .filter((candidate) => allowedIds === null || allowedIds.has(candidate.id));
+
+      this.relationshipSearchResults.set(results);
+      this.syncRelationshipAutocompletePanel();
+    } catch (error) {
+      if (token !== this.latestRelationshipSearchToken) {
+        return;
+      }
+
+      this.relationshipSearchResults.set([]);
+      this.errorMessage.set(readApiError(error));
+      this.syncRelationshipAutocompletePanel();
+    } finally {
+      if (token === this.latestRelationshipSearchToken) {
+        this.isSearchingRelationshipCandidates.set(false);
+        this.syncRelationshipAutocompletePanel();
+      }
+    }
+  }
+
+  private mapSearchCandidateToPerson(candidate: PersonSearchCandidate): Person {
+    const existingPerson = this.allPersons().find((person) => person.id === candidate.sourcePersonId);
+
+    if (existingPerson) {
+      return existingPerson;
+    }
+
+    return {
+      id: candidate.sourcePersonId,
+      sourcePersonId: candidate.sourcePersonId,
+      canEdit: false,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      middleName: candidate.middleName,
+      maidenName: candidate.maidenName,
+      gender: candidate.gender,
+      birthDate: candidate.birthDate,
+      deathDate: null,
+      birthPlace: candidate.birthPlace,
+      deathPlace: null,
+      biography: null,
+      isLiving: candidate.isLiving,
+      photoUrl: null,
+      createdAt: "",
+      updatedAt: "",
+    };
+  }
+
+  private resetRelationshipSearch(): void {
+    this.clearRelationshipSearchDebounce();
+    this.latestRelationshipSearchToken += 1;
+    this.isSearchingRelationshipCandidates.set(false);
+    this.relationshipSearchResults.set([]);
+    this.relationshipAutocompleteTrigger?.closePanel();
+  }
+
+  private clearRelationshipSearchDebounce(): void {
+    if (this.relationshipSearchDebounceId !== null) {
+      clearTimeout(this.relationshipSearchDebounceId);
+      this.relationshipSearchDebounceId = null;
+    }
+  }
+
+  private syncRelationshipAutocompletePanel(): void {
+    const trigger = this.relationshipAutocompleteTrigger;
+
+    if (!trigger) {
+      return;
+    }
+
+    const query = this.relationshipForm.controls.relatedPersonQuery.value.trim();
+    const hasOptions = this.filteredRelationshipCandidates().length > 0;
+    const shouldOpen = query.length > 0 && (hasOptions || this.isSearchingRelationshipCandidates() || this.showRelationshipSearchEmptyState());
+
+    if (shouldOpen) {
+      if (!trigger.panelOpen) {
+        trigger.openPanel();
+      }
+      return;
+    }
+
+    trigger.closePanel();
   }
 }
 

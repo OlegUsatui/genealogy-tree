@@ -110,6 +110,11 @@ a {
   align-items: center;
 }
 
+.cdk-overlay-container,
+.cdk-global-overlay-wrapper {
+  z-index: 1300 !important;
+}
+
 .session-chip .mdc-evolution-chip__text-label {
   display: block;
   max-width: 100%;
