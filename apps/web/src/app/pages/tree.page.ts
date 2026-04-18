@@ -555,7 +555,8 @@ export class TreePageComponent {
   readonly selectedPersonPanel = signal<PersonPanelState | null>(null);
   readonly shareLink = signal("");
   readonly isGeneratingShareLink = signal(false);
-  readonly minZoom = 0.4;
+  readonly defaultMinZoom = 0.4;
+  readonly absoluteMinZoom = 0.02;
   readonly maxZoom = 10;
 
   private panState: {
@@ -882,7 +883,11 @@ export class TreePageComponent {
       const midpointX = (firstPointer.x + secondPointer.x) / 2 - rect.left;
       const midpointY = (firstPointer.y + secondPointer.y) / 2 - rect.top;
       const distance = measurePointerDistance(firstPointer, secondPointer);
-      const nextZoom = clamp((distance / this.pinchState.startDistance) * this.pinchState.startZoom, this.minZoom, this.maxZoom);
+      const nextZoom = clamp(
+        (distance / this.pinchState.startDistance) * this.pinchState.startZoom,
+        this.currentMinZoom(viewport),
+        this.maxZoom,
+      );
 
       this.zoom.set(nextZoom);
       this.panX.set(midpointX - this.pinchState.anchorContentX * nextZoom);
@@ -991,7 +996,7 @@ export class TreePageComponent {
 
   private applyZoom(nextZoom: number, viewport: HTMLElement, clientX?: number, clientY?: number): void {
     const currentZoom = this.zoom();
-    const clampedZoom = clamp(nextZoom, this.minZoom, this.maxZoom);
+    const clampedZoom = clamp(nextZoom, this.currentMinZoom(viewport), this.maxZoom);
 
     if (Math.abs(clampedZoom - currentZoom) < 0.001) {
       return;
@@ -1070,11 +1075,41 @@ export class TreePageComponent {
     const availableHeight = Math.max(120, viewport.clientHeight - framePadding * 2);
     const widthRatio = availableWidth / diagram.width;
     const heightRatio = availableHeight / diagram.height;
-    const fitZoom = clamp(Math.min(widthRatio, heightRatio), this.minZoom, this.maxZoom);
+    const fitZoom = clamp(Math.min(widthRatio, heightRatio), this.absoluteMinZoom, this.maxZoom);
 
     this.zoom.set(fitZoom);
     this.panX.set((viewport.clientWidth - diagram.width * fitZoom) / 2);
     this.panY.set((viewport.clientHeight - diagram.height * fitZoom) / 2);
+  }
+
+  private currentMinZoom(viewport: HTMLElement): number {
+    const diagram = this.diagram();
+
+    if (!diagram || diagram.width <= 0 || diagram.height <= 0) {
+      return this.absoluteMinZoom;
+    }
+
+    const framePadding = 48;
+    const availableWidth = Math.max(120, viewport.clientWidth - framePadding * 2);
+    const availableHeight = Math.max(120, viewport.clientHeight - framePadding * 2);
+    const fitZoom = Math.min(availableWidth / diagram.width, availableHeight / diagram.height);
+    const rootNode = diagram.nodes.find((node) => node.role === "root");
+
+    if (!rootNode) {
+      return clamp(Math.min(this.defaultMinZoom, fitZoom), this.absoluteMinZoom, this.maxZoom);
+    }
+
+    const [minX, minY] = parseViewBoxOrigin(diagram.viewBox);
+    const maxX = minX + diagram.width;
+    const maxY = minY + diagram.height;
+    const rootCenterX = rootNode.x + rootNode.width / 2;
+    const rootCenterY = rootNode.y + rootNode.height / 2;
+    const centeredFitZoom = Math.min(
+      (availableWidth / 2) / Math.max(rootCenterX - minX, maxX - rootCenterX, 1),
+      (availableHeight / 2) / Math.max(rootCenterY - minY, maxY - rootCenterY, 1),
+    );
+
+    return clamp(Math.min(this.defaultMinZoom, fitZoom, centeredFitZoom), this.absoluteMinZoom, this.maxZoom);
   }
 
   private centerRootNode(diagram: TreeDiagram): void {

@@ -418,7 +418,8 @@ export class FamilyNetworkPageComponent {
   readonly panX = signal(0);
   readonly panY = signal(0);
   readonly isPanning = signal(false);
-  readonly minZoom = 0.4;
+  readonly defaultMinZoom = 0.4;
+  readonly absoluteMinZoom = 0.02;
   readonly maxZoom = 10;
 
   private panState: {
@@ -438,6 +439,7 @@ export class FamilyNetworkPageComponent {
     anchorContentY: number;
   } | null = null;
   private suppressNodeClick = false;
+  private currentDiagram: NetworkDiagram | null = null;
 
   constructor() {
     effect(
@@ -686,7 +688,11 @@ export class FamilyNetworkPageComponent {
       const midpointX = (firstPointer.x + secondPointer.x) / 2 - rect.left;
       const midpointY = (firstPointer.y + secondPointer.y) / 2 - rect.top;
       const distance = measurePointerDistance(firstPointer, secondPointer);
-      const nextZoom = clamp((distance / this.pinchState.startDistance) * this.pinchState.startZoom, this.minZoom, this.maxZoom);
+      const nextZoom = clamp(
+        (distance / this.pinchState.startDistance) * this.pinchState.startZoom,
+        this.currentMinZoom(viewport),
+        this.maxZoom,
+      );
 
       this.zoom.set(nextZoom);
       this.panX.set(midpointX - this.pinchState.anchorContentX * nextZoom);
@@ -751,6 +757,7 @@ export class FamilyNetworkPageComponent {
     try {
       const graph = await awaitOne<FamilyGraphResponse>(this.graphService.getGraph(personId));
       const diagram = buildTreeLikeNetworkDiagram(graph);
+      this.currentDiagram = diagram;
       this.nodes.set(diagram.nodes);
       this.links.set(diagram.links);
       this.viewBox.set(diagram.viewBox);
@@ -763,6 +770,7 @@ export class FamilyNetworkPageComponent {
         });
       });
     } catch (error) {
+      this.currentDiagram = null;
       this.errorMessage.set(readApiError(error));
       this.nodes.set([]);
       this.links.set([]);
@@ -774,7 +782,7 @@ export class FamilyNetworkPageComponent {
 
   private applyZoom(nextZoom: number, viewport: HTMLElement, clientX?: number, clientY?: number): void {
     const currentZoom = this.zoom();
-    const clampedZoom = clamp(nextZoom, this.minZoom, this.maxZoom);
+    const clampedZoom = clamp(nextZoom, this.currentMinZoom(viewport), this.maxZoom);
 
     if (Math.abs(clampedZoom - currentZoom) < 0.001) {
       return;
@@ -843,11 +851,41 @@ export class FamilyNetworkPageComponent {
     const availableHeight = Math.max(120, viewport.clientHeight - framePadding * 2);
     const widthRatio = availableWidth / diagram.width;
     const heightRatio = availableHeight / diagram.height;
-    const fitZoom = clamp(Math.min(widthRatio, heightRatio), this.minZoom, this.maxZoom);
+    const fitZoom = clamp(Math.min(widthRatio, heightRatio), this.absoluteMinZoom, this.maxZoom);
 
     this.zoom.set(fitZoom);
     this.panX.set((viewport.clientWidth - diagram.width * fitZoom) / 2);
     this.panY.set((viewport.clientHeight - diagram.height * fitZoom) / 2);
+  }
+
+  private currentMinZoom(viewport: HTMLElement): number {
+    const diagram = this.currentDiagram;
+
+    if (!diagram || diagram.width <= 0 || diagram.height <= 0) {
+      return this.absoluteMinZoom;
+    }
+
+    const framePadding = 48;
+    const availableWidth = Math.max(120, viewport.clientWidth - framePadding * 2);
+    const availableHeight = Math.max(120, viewport.clientHeight - framePadding * 2);
+    const fitZoom = Math.min(availableWidth / diagram.width, availableHeight / diagram.height);
+    const focusNode = diagram.nodes.find((node) => node.role === "focus");
+
+    if (!focusNode) {
+      return clamp(Math.min(this.defaultMinZoom, fitZoom), this.absoluteMinZoom, this.maxZoom);
+    }
+
+    const [minX, minY] = parseViewBoxOrigin(diagram.viewBox);
+    const maxX = minX + diagram.width;
+    const maxY = minY + diagram.height;
+    const focusCenterX = focusNode.x + focusNode.width / 2;
+    const focusCenterY = focusNode.y + focusNode.height / 2;
+    const centeredFitZoom = Math.min(
+      (availableWidth / 2) / Math.max(focusCenterX - minX, maxX - focusCenterX, 1),
+      (availableHeight / 2) / Math.max(focusCenterY - minY, maxY - focusCenterY, 1),
+    );
+
+    return clamp(Math.min(this.defaultMinZoom, fitZoom, centeredFitZoom), this.absoluteMinZoom, this.maxZoom);
   }
 
   private centerFocusNode(diagram: NetworkDiagram): void {
