@@ -3,6 +3,7 @@ import type { Person } from "@family-tree/shared";
 import { CommonModule } from "@angular/common";
 import { Component, EventEmitter, Input, Output } from "@angular/core";
 
+import { formatPersonDisplayName } from "../lib/person-name";
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 
@@ -424,7 +425,7 @@ export class PersonSidePanelComponent {
   @Output() addSpouse = new EventEmitter<void>();
 
   displayName(person: Person): string {
-    return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+    return formatPersonDisplayName(person);
   }
 
   renderablePhotoUrl(person: Person): string | null {

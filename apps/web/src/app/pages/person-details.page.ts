@@ -15,6 +15,7 @@ import { MatAutocompleteTrigger } from "@angular/material/autocomplete";
 import { MatSnackBar } from "@angular/material/snack-bar";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
+import { formatPersonDisplayName } from "../lib/person-name";
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
@@ -975,7 +976,7 @@ export class PersonDetailsPageComponent {
   }
 
   displayName(person: Person): string {
-    return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+    return formatPersonDisplayName(person);
   }
 
   renderablePhotoUrl(person: Person): string | null {

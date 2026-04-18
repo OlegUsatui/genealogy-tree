@@ -9,6 +9,7 @@ import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatSnackBar } from "@angular/material/snack-bar";
 
 import { PhotoCropDialogComponent } from "../components/photo-crop-dialog.component";
+import { formatPersonDisplayName } from "../lib/person-name";
 import { buildPhotoInitials, isSupportedPhotoUrl, optimizePhotoFile, validatePhotoFile } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
@@ -771,7 +772,7 @@ export class PersonFormPageComponent {
   }
 
   displayName(person: Person): string {
-    return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+    return formatPersonDisplayName(person);
   }
 
   async navigateBackFromForm(): Promise<void> {

@@ -8,6 +8,7 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angula
 import { ActivatedRoute } from "@angular/router";
 import { MatSnackBar } from "@angular/material/snack-bar";
 
+import { formatPersonDisplayName } from "../lib/person-name";
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
@@ -1144,7 +1145,7 @@ export class FamilyPublicPageComponent {
   }
 
   displayName(person: Person): string {
-    return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+    return formatPersonDisplayName(person);
   }
 
   sceneTransform(): string {

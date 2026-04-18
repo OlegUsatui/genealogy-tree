@@ -7,6 +7,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 
 import { PersonSidePanelComponent } from "../components/person-side-panel.component";
+import { formatPersonDisplayName } from "../lib/person-name";
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
@@ -473,7 +474,7 @@ export class FamilyNetworkPageComponent {
   }
 
   titleLines(person: Person): string[] {
-    return wrapLabel([person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ") || "Без імені", 16, 3);
+    return wrapLabel(formatPersonDisplayName(person) || "Без імені", 16, 3);
   }
 
   sceneTransform(): string {

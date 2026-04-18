@@ -6,6 +6,7 @@ import { Component, DestroyRef, computed, effect, inject, signal } from "@angula
 import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 
+import { formatPersonDisplayName } from "../lib/person-name";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { LoadingOverlayService } from "../services/loading-overlay.service";
@@ -750,11 +751,11 @@ export class PersonsListPageComponent {
   }
 
   displayListName(person: Person): string {
-    return buildPersonName(person.lastName, person.firstName, person.middleName);
+    return buildPersonName(person.lastName, person.firstName, person.middleName, person.maidenName);
   }
 
   displaySearchName(person: PersonSearchCandidate): string {
-    return buildPersonName(person.lastName, person.firstName, person.middleName);
+    return buildPersonName(person.lastName, person.firstName, person.middleName, person.maidenName);
   }
 
   displayLifeSummary(birthDate: string | null, deathDate: string | null, isLiving: boolean | null): string {
@@ -855,8 +856,13 @@ function readApiError(error: unknown): string {
   return "Помилка запиту";
 }
 
-function buildPersonName(lastName: string | null, firstName: string, middleName: string | null): string {
-  return [lastName, firstName, middleName].filter(Boolean).join(" ");
+function buildPersonName(
+  lastName: string | null,
+  firstName: string,
+  middleName: string | null,
+  maidenName: string | null,
+): string {
+  return formatPersonDisplayName({ firstName, middleName, lastName, maidenName }, { order: "surname-first" });
 }
 
 function buildLifeSummary(birthDate: string | null, deathDate: string | null, isLiving: boolean | null): string {
@@ -920,8 +926,8 @@ function pluralizeLetters(count: number): string {
 
 function sortPersons(persons: Person[]): Person[] {
   return [...persons].sort((left, right) =>
-    buildPersonName(left.lastName, left.firstName, left.middleName).localeCompare(
-      buildPersonName(right.lastName, right.firstName, right.middleName),
+    buildPersonName(left.lastName, left.firstName, left.middleName, left.maidenName).localeCompare(
+      buildPersonName(right.lastName, right.firstName, right.middleName, right.maidenName),
       "uk",
     ),
   );

@@ -7,6 +7,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 
+import { formatPersonDisplayName } from "../lib/person-name";
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
 import { UsersService } from "../services/users.service";
@@ -486,7 +487,7 @@ export class UserCreatePageComponent {
   }
 
   candidateHeadline(candidate: RegistrationPersonCandidate): string {
-    return [candidate.lastName, candidate.firstName, candidate.middleName].filter(Boolean).join(" ");
+    return formatPersonDisplayName(candidate, { order: "surname-first" });
   }
 
   candidateDetails(candidate: RegistrationPersonCandidate): string {

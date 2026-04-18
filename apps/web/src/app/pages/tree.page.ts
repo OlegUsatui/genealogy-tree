@@ -8,6 +8,7 @@ import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatSnackBar } from "@angular/material/snack-bar";
 
 import { PersonSidePanelComponent } from "../components/person-side-panel.component";
+import { formatPersonDisplayName } from "../lib/person-name";
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
@@ -625,7 +626,7 @@ export class TreePageComponent {
   }
 
   displayName(person: Person): string {
-    return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(" ");
+    return formatPersonDisplayName(person);
   }
 
   titleLines(person: Person): string[] {

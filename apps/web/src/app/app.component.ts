@@ -5,6 +5,7 @@ import { Component, DestroyRef, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 
+import { formatPersonDisplayName } from "./lib/person-name";
 import { MATERIAL_IMPORTS } from "./material";
 import { AuthService } from "./services/auth.service";
 import { LoadingOverlayService } from "./services/loading-overlay.service";
@@ -811,7 +812,7 @@ export class AppComponent {
   }
 
   private formatPersonName(person: Person): string {
-    return [person.firstName, person.lastName].filter(Boolean).join(" ").trim();
+    return formatPersonDisplayName(person);
   }
 
   private fallbackAccountName(email: string | null): string {
