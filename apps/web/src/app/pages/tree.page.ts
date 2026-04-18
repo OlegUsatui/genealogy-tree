@@ -7,6 +7,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatSnackBar } from "@angular/material/snack-bar";
 
+import { PersonSidePanelComponent } from "../components/person-side-panel.component";
 import { buildPhotoInitials, isSupportedPhotoUrl } from "../lib/photo";
 import { MATERIAL_IMPORTS } from "../material";
 import { AuthService } from "../services/auth.service";
@@ -19,7 +20,7 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterLink, ...MATERIAL_IMPORTS],
+  imports: [CommonModule, RouterLink, PersonSidePanelComponent, ...MATERIAL_IMPORTS],
   template: `
     <section class="tree-page">
       <div class="tree-hud" *ngIf="isLoading() || errorMessage() || rootPersonId()">
@@ -62,34 +63,18 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         <p class="error-text tree-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
       </div>
 
-      <div class="node-action-backdrop" *ngIf="nodeActionMenu()" (click)="closeNodeActionMenu()"></div>
-      <div
-        class="node-action-menu"
-        *ngIf="nodeActionMenu() as menu"
-        [style.left.px]="menu.left"
-        [style.top.px]="menu.top"
-        (click)="$event.stopPropagation()"
-      >
-        <button mat-flat-button color="primary" type="button" (click)="openPersonProfile(menu.personId)">
-          Профіль
-        </button>
-        <button mat-stroked-button type="button" (click)="openPersonTree(menu.personId)">
-          Дерево
-        </button>
-        <button mat-stroked-button type="button" (click)="openPersonGraph(menu.personId)">
-          Мережа
-        </button>
-        <div class="node-action-divider"></div>
-        <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'parents')">
-          Додати батька / матір
-        </button>
-        <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'children')">
-          Додати дитину
-        </button>
-        <button mat-stroked-button type="button" (click)="openCreateRelative(menu.personId, 'spouses')">
-          Додати партнера / партнерку
-        </button>
-      </div>
+      <app-person-side-panel
+        *ngIf="selectedPersonPanel() as panel"
+        [person]="panel.person"
+        [contextLabel]="panel.contextLabel"
+        (close)="closePersonPanel()"
+        (openProfile)="openSelectedPersonProfile()"
+        (openTree)="openSelectedPersonTree()"
+        (openGraph)="openSelectedPersonGraph()"
+        (addParent)="openSelectedPersonCreateRelative('parents')"
+        (addChild)="openSelectedPersonCreateRelative('children')"
+        (addSpouse)="openSelectedPersonCreateRelative('spouses')"
+      ></app-person-side-panel>
 
       <div
         #viewport
@@ -136,9 +121,9 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
                 [class.descendant-node]="node.role === 'descendant'"
                 [class.sibling-node]="node.role === 'sibling'"
                 [class.spouse-node]="node.role === 'spouse'"
-                [class.node-action-open]="nodeActionMenu()?.personId === node.person.id"
+                [class.node-action-open]="selectedPersonPanel()?.person?.id === node.person.id"
                 [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
-                (click)="openNodeActionMenu(node.person.id, $event)"
+                (click)="openPersonPanel(node, $event)"
               >
                 <rect
                   class="tree-node-card"
@@ -330,34 +315,6 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
         background: rgba(255, 255, 255, 0.92);
         color: var(--text);
         font: inherit;
-      }
-
-      .node-action-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 4;
-      }
-
-      .node-action-menu {
-        position: fixed;
-        z-index: 5;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        width: 232px;
-        padding: 12px;
-        border-radius: 18px;
-        border: 1px solid rgba(127, 160, 200, 0.18);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98)),
-          linear-gradient(135deg, rgba(222, 233, 248, 0.16), transparent 42%);
-        box-shadow: 0 18px 40px rgba(31, 53, 79, 0.18);
-      }
-
-      .node-action-divider {
-        height: 1px;
-        margin: 2px 0;
-        background: rgba(127, 160, 200, 0.18);
       }
 
       .tree-error {
@@ -595,7 +552,7 @@ export class TreePageComponent {
   readonly zoom = signal(1);
   readonly panX = signal(0);
   readonly panY = signal(0);
-  readonly nodeActionMenu = signal<NodeActionMenuState | null>(null);
+  readonly selectedPersonPanel = signal<PersonPanelState | null>(null);
   readonly shareLink = signal("");
   readonly isGeneratingShareLink = signal(false);
   readonly minZoom = 0.4;
@@ -713,52 +670,36 @@ export class TreePageComponent {
     }
   }
 
-  openNodeActionMenu(personId: string, event: MouseEvent): void {
+  openPersonPanel(node: TreeDiagramNode, event: Event): void {
     if (this.suppressNodeClick) {
       return;
     }
 
+    event.preventDefault();
     event.stopPropagation();
 
-    const currentTarget = event.currentTarget;
-
-    if (!(currentTarget instanceof SVGGraphicsElement)) {
+    if (this.selectedPersonPanel()?.person.id === node.person.id) {
+      this.closePersonPanel();
       return;
     }
 
-    const rect = currentTarget.getBoundingClientRect();
-    const menuWidth = 168;
-    const menuHeight = 320;
-    const viewportMargin = 16;
-    const preferredLeft = rect.right + 12;
-    const fallbackLeft = rect.left - menuWidth - 12;
-    const left = preferredLeft + menuWidth + viewportMargin <= window.innerWidth
-      ? preferredLeft
-      : Math.max(viewportMargin, fallbackLeft);
-    const top = clamp(
-      rect.top + rect.height / 2 - menuHeight / 2,
-      viewportMargin,
-      window.innerHeight - menuHeight - viewportMargin,
-    );
-
-    this.nodeActionMenu.set({
-      personId,
-      left,
-      top,
+    this.selectedPersonPanel.set({
+      person: node.person,
+      contextLabel: this.nodeRoleLabel(node),
     });
   }
 
-  closeNodeActionMenu(): void {
-    this.nodeActionMenu.set(null);
+  closePersonPanel(): void {
+    this.selectedPersonPanel.set(null);
   }
 
   async openPersonProfile(personId: string): Promise<void> {
-    this.closeNodeActionMenu();
+    this.closePersonPanel();
     await this.router.navigate(["/persons", personId]);
   }
 
   async openPersonTree(personId: string): Promise<void> {
-    this.closeNodeActionMenu();
+    this.closePersonPanel();
 
     if (personId === this.rootPersonId()) {
       await this.loadTree(personId);
@@ -769,12 +710,12 @@ export class TreePageComponent {
   }
 
   async openPersonGraph(personId: string): Promise<void> {
-    this.closeNodeActionMenu();
+    this.closePersonPanel();
     await this.router.navigate(["/graph", personId]);
   }
 
   async openCreateRelative(personId: string, group: "parents" | "children" | "spouses"): Promise<void> {
-    this.closeNodeActionMenu();
+    this.closePersonPanel();
     await this.router.navigate(["/persons/new"], {
       queryParams: {
         relatedTo: personId,
@@ -782,6 +723,46 @@ export class TreePageComponent {
         returnTreePersonId: this.rootPersonId(),
       },
     });
+  }
+
+  async openSelectedPersonProfile(): Promise<void> {
+    const personId = this.selectedPersonPanel()?.person.id;
+
+    if (!personId) {
+      return;
+    }
+
+    await this.openPersonProfile(personId);
+  }
+
+  async openSelectedPersonTree(): Promise<void> {
+    const personId = this.selectedPersonPanel()?.person.id;
+
+    if (!personId) {
+      return;
+    }
+
+    await this.openPersonTree(personId);
+  }
+
+  async openSelectedPersonGraph(): Promise<void> {
+    const personId = this.selectedPersonPanel()?.person.id;
+
+    if (!personId) {
+      return;
+    }
+
+    await this.openPersonGraph(personId);
+  }
+
+  async openSelectedPersonCreateRelative(group: "parents" | "children" | "spouses"): Promise<void> {
+    const personId = this.selectedPersonPanel()?.person.id;
+
+    if (!personId) {
+      return;
+    }
+
+    await this.openCreateRelative(personId, group);
   }
 
   async generateShareLink(): Promise<void> {
@@ -841,7 +822,7 @@ export class TreePageComponent {
   }
 
   startPan(event: PointerEvent): void {
-    this.closeNodeActionMenu();
+    this.closePersonPanel();
     const viewport = event.currentTarget;
 
     if (!(viewport instanceof HTMLElement)) {
@@ -984,7 +965,7 @@ export class TreePageComponent {
   }
 
   private async loadTree(personId: string): Promise<void> {
-    this.closeNodeActionMenu();
+    this.closePersonPanel();
     this.errorMessage.set("");
     this.isLoading.set(true);
 
@@ -1121,10 +1102,9 @@ export class TreePageComponent {
   }
 }
 
-interface NodeActionMenuState {
-  personId: string;
-  left: number;
-  top: number;
+interface PersonPanelState {
+  person: Person;
+  contextLabel: string;
 }
 
 function truncate(value: string, limit: number): string {
