@@ -195,7 +195,10 @@ import { buildTreeDiagram, type TreeDiagram, type TreeDiagramNode } from "./tree
             </svg>
           </ng-container>
 
-          <div class="empty-state tree-empty-state tree-empty-state--overlay" *ngIf="!isLoading() && !diagram() && !errorMessage()">
+          <div
+            class="empty-state tree-empty-state tree-empty-state--overlay"
+            *ngIf="hasCompletedInitialTreeLoad() && !isLoading() && !diagram() && !errorMessage()"
+          >
             Немає достатньо даних для побудови дерева.
           </div>
         </div>
@@ -582,7 +585,8 @@ export class TreePageComponent {
   private readonly snackBar = inject(MatSnackBar);
 
   readonly errorMessage = signal("");
-  readonly isLoading = signal(false);
+  readonly isLoading = signal(true);
+  readonly hasCompletedInitialTreeLoad = signal(false);
   readonly tree = signal<TreeResponse | null>(null);
   readonly diagram = signal<TreeDiagram | null>(null);
   readonly rootPersonId = signal<string | null>(null);
@@ -614,6 +618,8 @@ export class TreePageComponent {
     anchorContentY: number;
   } | null = null;
   private suppressNodeClick = false;
+  private hasLoadedPersons = false;
+  private hasProcessedInitialRoute = false;
 
   constructor() {
     effect(
@@ -632,6 +638,7 @@ export class TreePageComponent {
     });
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      this.hasProcessedInitialRoute = true;
       const personId = params.get("personId");
 
       if (personId) {
@@ -645,7 +652,14 @@ export class TreePageComponent {
       const firstPersonId = this.getDefaultRootPersonId(this.persons());
 
       if (firstPersonId) {
+        this.rootPersonId.set(firstPersonId);
         void this.loadTree(firstPersonId);
+        return;
+      }
+
+      if (this.hasLoadedPersons) {
+        this.isLoading.set(false);
+        this.hasCompletedInitialTreeLoad.set(true);
       }
     });
 
@@ -959,6 +973,13 @@ export class TreePageComponent {
       }
     } catch (error) {
       this.errorMessage.set(readApiError(error));
+    } finally {
+      this.hasLoadedPersons = true;
+
+      if (this.hasProcessedInitialRoute && !this.rootPersonId()) {
+        this.isLoading.set(false);
+        this.hasCompletedInitialTreeLoad.set(true);
+      }
     }
   }
 
@@ -983,6 +1004,7 @@ export class TreePageComponent {
       this.errorMessage.set(readApiError(error));
     } finally {
       this.isLoading.set(false);
+      this.hasCompletedInitialTreeLoad.set(true);
     }
   }
 

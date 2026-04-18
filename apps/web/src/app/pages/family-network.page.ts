@@ -194,7 +194,10 @@ type NodeActionMenuState = {
           </svg>
           </div>
         </div>
-        <div class="empty-state network-empty-state" *ngIf="!isLoading() && !errorMessage() && nodes().length === 0">
+        <div
+          class="empty-state network-empty-state"
+          *ngIf="hasCompletedInitialGraphLoad() && !isLoading() && !errorMessage() && nodes().length === 0"
+        >
           <div class="network-empty-card">
             <h3>Немає даних для побудови мережі</h3>
             <p class="muted">Для цієї людини ще не знайдено достатньо зв’язків, щоб показати всю родину.</p>
@@ -451,7 +454,8 @@ export class FamilyNetworkPageComponent {
   private readonly graphService = inject(GraphService);
   private readonly loadingOverlay = inject(LoadingOverlayService);
 
-  readonly isLoading = signal(false);
+  readonly isLoading = signal(true);
+  readonly hasCompletedInitialGraphLoad = signal(false);
   readonly errorMessage = signal("");
   readonly focusPersonId = signal<string | null>(null);
   readonly nodes = signal<NetworkNode[]>([]);
@@ -506,6 +510,8 @@ export class FamilyNetworkPageComponent {
 
       if (!personId) {
         this.errorMessage.set("Людину не знайдено");
+        this.isLoading.set(false);
+        this.hasCompletedInitialGraphLoad.set(true);
         return;
       }
 
@@ -804,6 +810,7 @@ export class FamilyNetworkPageComponent {
       this.links.set([]);
     } finally {
       this.isLoading.set(false);
+      this.hasCompletedInitialGraphLoad.set(true);
     }
   }
 

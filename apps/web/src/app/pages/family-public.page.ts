@@ -304,7 +304,7 @@ type QuickAddMenuState = {
       </ng-container>
 
       <ng-template #emptyState>
-        <section class="tree-page tree-page--empty">
+        <section class="tree-page tree-page--empty" *ngIf="hasCompletedInitialFamilyLoad() && !isLoading() && !errorMessage()">
           <div class="empty-state tree-empty-state">Немає достатньо даних для побудови мережі родини.</div>
         </section>
       </ng-template>
@@ -1038,7 +1038,8 @@ export class FamilyPublicPageComponent {
   private readonly loadingOverlay = inject(LoadingOverlayService);
   private readonly snackBar = inject(MatSnackBar);
 
-  readonly isLoading = signal(false);
+  readonly isLoading = signal(true);
+  readonly hasCompletedInitialFamilyLoad = signal(false);
   readonly errorMessage = signal("");
   readonly family = signal<PublicFamilyTreeResponse | null>(null);
   readonly diagram = signal<FamilyNetworkDiagram | null>(null);
@@ -1118,6 +1119,8 @@ export class FamilyPublicPageComponent {
 
       if (!token) {
         this.errorMessage.set("Посилання на мережу родини некоректне");
+        this.isLoading.set(false);
+        this.hasCompletedInitialFamilyLoad.set(true);
         return;
       }
 
@@ -1705,6 +1708,7 @@ export class FamilyPublicPageComponent {
       this.errorMessage.set(readApiError(error));
     } finally {
       this.isLoading.set(false);
+      this.hasCompletedInitialFamilyLoad.set(true);
     }
   }
 

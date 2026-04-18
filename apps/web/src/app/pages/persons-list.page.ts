@@ -2,12 +2,13 @@ import type { Person, PersonSearchCandidate } from "@family-tree/shared";
 
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, DestroyRef, computed, effect, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 
 import { MATERIAL_IMPORTS } from "../material";
 import { awaitOne } from "../services/await-one";
+import { LoadingOverlayService } from "../services/loading-overlay.service";
 import { PersonsService } from "../services/persons.service";
 import { SearchService } from "../services/search.service";
 
@@ -136,14 +137,14 @@ import { SearchService } from "../services/search.service";
         </div>
 
         <ng-template #mineEmptyState>
-          <div class="empty-state" *ngIf="listErrorMessage(); else mineNoResultsState">
+          <div class="empty-state" *ngIf="!isLoading() && listErrorMessage(); else mineNoResultsState">
             <h3>Не вдалося завантажити список</h3>
             <p class="muted">Сервер не повернув список людей. Спробуйте перезавантажити сторінку трохи пізніше.</p>
           </div>
         </ng-template>
 
         <ng-template #mineNoResultsState>
-          <div class="empty-state">
+          <div class="empty-state" *ngIf="!isLoading()">
             <h3>{{ persons().length === 0 ? "Список порожній" : "Нічого не знайдено" }}</h3>
             <p class="muted">
               {{
@@ -621,13 +622,16 @@ import { SearchService } from "../services/search.service";
   ],
 })
 export class PersonsListPageComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly personsService = inject(PersonsService);
   private readonly searchService = inject(SearchService);
   private readonly router = inject(Router);
+  private readonly loadingOverlay = inject(LoadingOverlayService);
   private readonly pageSize = 10;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private latestSearchToken = 0;
 
+  readonly isLoading = signal(true);
   readonly mode = signal<"mine" | "directory">("mine");
   readonly persons = signal<Person[]>([]);
   readonly localQuery = signal("");
@@ -673,6 +677,22 @@ export class PersonsListPageComponent {
   );
 
   constructor() {
+    effect(
+      () => {
+        if (this.isLoading()) {
+          this.loadingOverlay.show("persons-list-page");
+        } else {
+          this.loadingOverlay.hide("persons-list-page");
+        }
+      },
+      { allowSignalWrites: true },
+    );
+
+    this.destroyRef.onDestroy(() => {
+      this.loadingOverlay.hide("persons-list-page");
+      this.clearSearchDebounce();
+    });
+
     void this.loadPersons();
   }
 
@@ -783,11 +803,15 @@ export class PersonsListPageComponent {
   }
 
   private async loadPersons(): Promise<void> {
+    this.isLoading.set(true);
+
     try {
       const persons = await awaitOne<Person[]>(this.personsService.list());
       this.persons.set(sortPersons(persons));
     } catch (error) {
       this.listErrorMessage.set(readApiError(error));
+    } finally {
+      this.isLoading.set(false);
     }
   }
 
