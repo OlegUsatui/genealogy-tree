@@ -10,7 +10,7 @@ import { ApiService } from "./api.service";
 export class TreeService {
   private readonly api = inject(ApiService);
 
-  getTree(personId: string, up: number, down: number) {
+  getTree(personId: string, up: number | "all", down: number | "all") {
     return this.api.get<TreeResponse>(`/tree/${personId}`, {
       up,
       down,
