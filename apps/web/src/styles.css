@@ -10,7 +10,8 @@
   --muted: #6481a0;
   --accent: #1f67c6;
   --accent-soft: rgba(31, 103, 198, 0.12);
-  --danger: #285a99;
+  --danger: #b13a2f;
+  --danger-soft: rgba(177, 58, 47, 0.12);
   --shadow: 0 18px 40px rgba(48, 93, 148, 0.12);
   --radius: 18px;
   font-family: "Segoe UI", sans-serif;
@@ -66,6 +67,7 @@ a {
 .error-text {
   color: var(--danger);
   font-size: 14px;
+  font-weight: 600;
 }
 
 .mat-mdc-card {

@@ -173,7 +173,6 @@ import { PersonsService } from "./services/persons.service";
         display: flex;
         flex-direction: column;
         min-height: 100dvh;
-        height: 100dvh;
       }
 
       .shell-main {
@@ -183,6 +182,9 @@ import { PersonsService } from "./services/persons.service";
         flex-direction: column;
         padding-top: 14px;
         box-sizing: border-box;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
       }
 
       .shell-main > router-outlet {

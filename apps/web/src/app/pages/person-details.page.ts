@@ -6,9 +6,10 @@ import type {
   RelationshipDirection,
 } from "@family-tree/shared";
 
+import { A11yModule } from "@angular/cdk/a11y";
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, DestroyRef, ViewChild, inject, signal } from "@angular/core";
+import { Component, DestroyRef, HostListener, ViewChild, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { MatAutocompleteTrigger } from "@angular/material/autocomplete";
@@ -25,10 +26,12 @@ import { SearchService } from "../services/search.service";
 
 @Component({
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
+  imports: [A11yModule, CommonModule, ReactiveFormsModule, RouterLink, ...MATERIAL_IMPORTS],
   template: `
     <section class="app-page page-layout">
-      <p class="error-text" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+      <p class="error-text" *ngIf="errorMessage() && !relationshipModalGroup()" role="alert" aria-live="polite">
+        {{ errorMessage() }}
+      </p>
 
       <ng-container *ngIf="person() as person">
         <mat-card class="profile-card">
@@ -48,10 +51,46 @@ import { SearchService } from "../services/search.service";
             </div>
 
             <div class="profile-actions" *ngIf="isOwnProfile(); else readOnlyProfileNotice">
-              <a mat-stroked-button color="primary" [routerLink]="['/persons', person.id, 'edit']" class="action-link">Редагувати</a>
-              <a mat-button [routerLink]="['/tree', person.id]" class="action-link">Відкрити дерево</a>
-              <a mat-button [routerLink]="['/graph', person.id]" class="action-link">Мережа родини</a>
-              <button mat-stroked-button type="button" class="danger-button" (click)="deletePerson()">Видалити</button>
+              <div class="profile-primary-actions">
+                <a
+                  mat-flat-button
+                  color="primary"
+                  [routerLink]="['/persons', person.id, 'edit']"
+                  class="action-link"
+                  [attr.aria-label]="'Редагувати профіль ' + displayName(person)"
+                >
+                  Редагувати профіль
+                </a>
+                <a
+                  mat-stroked-button
+                  color="primary"
+                  [routerLink]="['/tree', person.id]"
+                  class="action-link"
+                  [attr.aria-label]="'Відкрити дерево для ' + displayName(person)"
+                >
+                  Відкрити дерево
+                </a>
+              </div>
+
+              <div class="profile-secondary-actions">
+                <a
+                  mat-button
+                  [routerLink]="['/graph', person.id]"
+                  class="action-link"
+                  [attr.aria-label]="'Подивитися мережу родини для ' + displayName(person)"
+                >
+                  Мережа родини
+                </a>
+                <button
+                  mat-button
+                  type="button"
+                  class="danger-button danger-button--quiet"
+                  [attr.aria-label]="'Видалити профіль ' + displayName(person)"
+                  (click)="deletePerson()"
+                >
+                  Видалити профіль
+                </button>
+              </div>
             </div>
 
             <ng-template #readOnlyProfileNotice>
@@ -86,7 +125,14 @@ import { SearchService } from "../services/search.service";
               <div class="relationship-column">
                 <div class="column-heading">
                   <h3>Батьки</h3>
-                  <button mat-stroked-button type="button" (click)="openRelationshipModal('parents')">Додати</button>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    [attr.aria-label]="addRelationshipButtonLabel('parents')"
+                    (click)="openRelationshipModal('parents')"
+                  >
+                    Додати
+                  </button>
                 </div>
                 <div
                   class="relationship-dropzone"
@@ -114,7 +160,15 @@ import { SearchService } from "../services/search.service";
                           <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
                         </div>
                       </div>
-                      <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                      <button
+                        *ngIf="isOwnProfile()"
+                        mat-button
+                        type="button"
+                        [attr.aria-label]="deleteRelationshipButtonLabel(item.relatedPerson)"
+                        (click)="deleteRelationship(item.relationship.id, item.relatedPerson)"
+                      >
+                        Видалити
+                      </button>
                     </mat-card>
                   </ng-container>
                 </div>
@@ -124,7 +178,14 @@ import { SearchService } from "../services/search.service";
               <div class="relationship-column">
                 <div class="column-heading">
                   <h3>Партнери</h3>
-                  <button mat-stroked-button type="button" (click)="openRelationshipModal('spouses')">Додати</button>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    [attr.aria-label]="addRelationshipButtonLabel('spouses')"
+                    (click)="openRelationshipModal('spouses')"
+                  >
+                    Додати
+                  </button>
                 </div>
                 <div
                   class="relationship-dropzone"
@@ -152,7 +213,15 @@ import { SearchService } from "../services/search.service";
                           <p class="muted">{{ item.relationship.startDate || "дата не вказана" }}</p>
                         </div>
                       </div>
-                      <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                      <button
+                        *ngIf="isOwnProfile()"
+                        mat-button
+                        type="button"
+                        [attr.aria-label]="deleteRelationshipButtonLabel(item.relatedPerson)"
+                        (click)="deleteRelationship(item.relationship.id, item.relatedPerson)"
+                      >
+                        Видалити
+                      </button>
                     </mat-card>
                   </ng-container>
                 </div>
@@ -162,7 +231,14 @@ import { SearchService } from "../services/search.service";
               <div class="relationship-column">
                 <div class="column-heading">
                   <h3>Діти</h3>
-                  <button mat-stroked-button type="button" (click)="openRelationshipModal('children')">Додати</button>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    [attr.aria-label]="addRelationshipButtonLabel('children')"
+                    (click)="openRelationshipModal('children')"
+                  >
+                    Додати
+                  </button>
                 </div>
                 <div
                   class="relationship-dropzone"
@@ -190,7 +266,15 @@ import { SearchService } from "../services/search.service";
                           <p class="muted">{{ item.relationship.notes || "Зв’язок батьки-діти" }}</p>
                         </div>
                       </div>
-                      <button *ngIf="isOwnProfile()" mat-button type="button" (click)="deleteRelationship(item.relationship.id)">Видалити</button>
+                      <button
+                        *ngIf="isOwnProfile()"
+                        mat-button
+                        type="button"
+                        [attr.aria-label]="deleteRelationshipButtonLabel(item.relatedPerson)"
+                        (click)="deleteRelationship(item.relationship.id, item.relatedPerson)"
+                      >
+                        Видалити
+                      </button>
                     </mat-card>
                   </ng-container>
                 </div>
@@ -199,15 +283,38 @@ import { SearchService } from "../services/search.service";
             </div>
         </mat-card>
 
-        <div class="relationship-modal-backdrop" *ngIf="relationshipModalGroup()" (click)="closeRelationshipModal()">
-          <mat-card class="relationship-modal" (click)="$event.stopPropagation()">
+        <div class="relationship-modal-backdrop" *ngIf="relationshipModalGroup()" role="presentation" (click)="closeRelationshipModal()">
+          <mat-card
+            cdkTrapFocus
+            [cdkTrapFocusAutoCapture]="true"
+            class="relationship-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="relationship-modal-title"
+            aria-describedby="relationship-modal-description relationship-modal-helper"
+            tabindex="-1"
+            (click)="$event.stopPropagation()"
+            (keydown.escape)="closeRelationshipModal()"
+          >
             <div class="relationship-modal-header">
               <div>
-                <h2>{{ relationshipModalTitle() }}</h2>
-                <p class="muted">{{ relationshipFormDescription() }}</p>
+                <h2 id="relationship-modal-title">{{ relationshipModalTitle() }}</h2>
+                <p id="relationship-modal-description" class="muted">{{ relationshipFormDescription() }}</p>
               </div>
-              <button mat-button type="button" class="modal-close-button" (click)="closeRelationshipModal()">×</button>
+              <button
+                mat-button
+                type="button"
+                class="modal-close-button"
+                aria-label="Закрити вікно додавання родича"
+                (click)="closeRelationshipModal()"
+              >
+                ×
+              </button>
             </div>
+
+            <p class="error-text modal-error" *ngIf="errorMessage() && relationshipModalGroup()" role="alert" aria-live="polite">
+              {{ errorMessage() }}
+            </p>
 
             <form [formGroup]="relationshipForm" (ngSubmit)="createRelationship()" class="form-grid">
               <mat-form-field appearance="outline">
@@ -255,7 +362,7 @@ import { SearchService } from "../services/search.service";
                 <textarea matInput id="notes" formControlName="notes"></textarea>
               </mat-form-field>
 
-              <div class="modal-helper">
+              <div id="relationship-modal-helper" class="modal-helper">
                 Якщо потрібної людини немає в списку, можна створити нового родича, і зв’язок додасться автоматично.
               </div>
 
@@ -279,6 +386,7 @@ import { SearchService } from "../services/search.service";
         display: flex;
         flex-direction: column;
         gap: 18px;
+        padding-bottom: 28px;
       }
 
       .profile-card,
@@ -346,8 +454,25 @@ import { SearchService } from "../services/search.service";
 
       .profile-actions {
         display: flex;
+        gap: 10px;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+
+      .profile-primary-actions,
+      .profile-secondary-actions {
+        display: flex;
         flex-wrap: wrap;
         gap: 10px;
+        justify-content: flex-end;
+      }
+
+      .profile-primary-actions > .mat-mdc-button-base {
+        min-height: 46px;
+      }
+
+      .profile-secondary-actions {
+        gap: 6px;
       }
 
       .profile-notice {
@@ -366,8 +491,11 @@ import { SearchService } from "../services/search.service";
       }
 
       .danger-button {
-        border-color: rgba(40, 90, 153, 0.28) !important;
         color: var(--danger) !important;
+      }
+
+      .danger-button--quiet {
+        background: var(--danger-soft) !important;
       }
 
       .action-link {
@@ -590,6 +718,10 @@ import { SearchService } from "../services/search.service";
         margin: 6px 0 0;
       }
 
+      .modal-error {
+        margin: 0 0 16px;
+      }
+
       .modal-close-button {
         min-width: 44px;
         width: 44px;
@@ -615,6 +747,11 @@ import { SearchService } from "../services/search.service";
 
         .profile-identity {
           width: 100%;
+        }
+
+        .profile-actions {
+          width: 100%;
+          align-items: stretch;
         }
       }
 
@@ -650,11 +787,18 @@ import { SearchService } from "../services/search.service";
           width: 100%;
         }
 
+        .profile-primary-actions,
+        .profile-secondary-actions {
+          width: 100%;
+        }
+
         .relationship-mode-picker {
           grid-template-columns: 1fr;
         }
 
         .profile-actions > .mat-mdc-button-base,
+        .profile-primary-actions > .mat-mdc-button-base,
+        .profile-secondary-actions > .mat-mdc-button-base,
         .relationship-mode-picker > .mat-mdc-button-base,
         .form-actions > .mat-mdc-button-base {
           width: 100%;
@@ -753,6 +897,16 @@ export class PersonDetailsPageComponent {
         void this.loadPage(personId);
       }
     });
+  }
+
+  @HostListener("document:keydown.escape", ["$event"])
+  onEscapeKey(event: KeyboardEvent): void {
+    if (!this.relationshipModalGroup()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.closeRelationshipModal();
   }
 
   relationshipCandidates(): Person[] {
@@ -896,6 +1050,21 @@ export class PersonDetailsPageComponent {
     }
   }
 
+  addRelationshipButtonLabel(group: RelationshipGroup): string {
+    switch (group) {
+      case "parents":
+        return "Додати батька або матір";
+      case "children":
+        return "Додати дитину";
+      case "spouses":
+        return "Додати партнера або партнерку";
+    }
+  }
+
+  deleteRelationshipButtonLabel(relatedPerson: Person): string {
+    return `Видалити зв’язок з ${this.displayName(relatedPerson)}`;
+  }
+
   async goToCreateRelative(group: RelationshipGroup): Promise<void> {
     const currentPerson = this.person();
 
@@ -920,6 +1089,7 @@ export class PersonDetailsPageComponent {
 
   closeRelationshipModal(): void {
     this.relationshipModalGroup.set(null);
+    this.errorMessage.set("");
     this.resetRelationshipForm();
   }
 
@@ -1026,15 +1196,24 @@ export class PersonDetailsPageComponent {
     }
   }
 
-  async deleteRelationship(relationshipId: string): Promise<void> {
+  async deleteRelationship(relationshipId: string, relatedPerson: Person): Promise<void> {
     const currentPerson = this.person();
 
     if (!currentPerson || !this.isOwnProfile()) {
       return;
     }
 
+    const confirmed = window.confirm(
+      `Видалити зв’язок з ${this.displayName(relatedPerson)}? Дію не можна скасувати.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
       await awaitOne<void>(this.relationshipsService.delete(relationshipId));
+      this.snackBar.open("Зв’язок видалено", "Закрити", { duration: 2500 });
       await this.loadPage(currentPerson.id);
     } catch (error) {
       this.errorMessage.set(readApiError(error));
@@ -1154,7 +1333,9 @@ export class PersonDetailsPageComponent {
       return;
     }
 
-    const confirmed = window.confirm(`Видалити профіль ${this.displayName(currentPerson)}?`);
+    const confirmed = window.confirm(
+      `Видалити профіль ${this.displayName(currentPerson)}? Дію не можна скасувати.`,
+    );
 
     if (!confirmed) {
       return;
