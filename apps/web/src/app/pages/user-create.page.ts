@@ -459,6 +459,10 @@ export class UserCreatePageComponent {
       this.onIdentityFieldsChanged();
     });
 
+    this.form.controls.middleName.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.onIdentityFieldsChanged();
+    });
+
     this.form.controls.lastName.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.onIdentityFieldsChanged();
     });
@@ -634,7 +638,11 @@ export class UserCreatePageComponent {
     this.latestSearchToken += 1;
     this.searchErrorMessage.set("");
 
-    const query = buildRegistrationQuery(this.form.controls.firstName.value, this.form.controls.lastName.value);
+    const query = buildRegistrationQuery(
+      this.form.controls.firstName.value,
+      this.form.controls.middleName.value,
+      this.form.controls.lastName.value,
+    );
 
     if (!query) {
       this.hasSearched.set(false);
@@ -715,16 +723,17 @@ function toCreateUserPayload(value: {
   };
 }
 
-function buildRegistrationQuery(firstName: string, lastName: string): string | null {
+function buildRegistrationQuery(firstName: string, middleName: string, lastName: string): string | null {
   const normalizedFirstName = firstName.trim();
   const normalizedLastName = lastName.trim();
-  const combinedLength = normalizedFirstName.length + normalizedLastName.length;
+  const normalizedMiddleName = middleName.trim();
+  const nameParts = [normalizedLastName, normalizedMiddleName, normalizedFirstName].filter(Boolean);
 
-  if (normalizedFirstName.length < 2 || normalizedLastName.length < 2 || combinedLength < 4) {
+  if (normalizedFirstName.length < 2 || nameParts.length < 2) {
     return null;
   }
 
-  return [normalizedLastName, normalizedFirstName].filter(Boolean).join(" ");
+  return nameParts.join(" ");
 }
 
 function normalizeIdentityValue(value: string | null | undefined): string {

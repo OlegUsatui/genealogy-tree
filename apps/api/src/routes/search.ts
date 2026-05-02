@@ -69,11 +69,11 @@ async function queryGlobalPersonCandidates(
     .bind()
     .all<RegistrationCandidateRow>();
 
-  const normalizedQuery = normalizeSearchValue(query);
+  const normalizedQueryTokens = tokenizeSearchQuery(query);
   const candidates = new Map<string, RegistrationPersonCandidate>();
 
   for (const row of result.results) {
-    if (!matchesSearchQuery(row, normalizedQuery)) {
+    if (!matchesSearchQuery(row, normalizedQueryTokens)) {
       continue;
     }
 
@@ -106,13 +106,27 @@ function mapRegistrationCandidateRow(row: RegistrationCandidateRow): Registratio
   };
 }
 
-function matchesSearchQuery(row: RegistrationCandidateRow, normalizedQuery: string): boolean {
-  return [row.first_name, row.last_name, row.middle_name, row.maiden_name]
-    .some((value) => normalizeSearchValue(value).includes(normalizedQuery));
+function matchesSearchQuery(row: RegistrationCandidateRow, normalizedQueryTokens: string[]): boolean {
+  if (normalizedQueryTokens.length === 0) {
+    return false;
+  }
+
+  const searchableValues = [row.first_name, row.last_name, row.middle_name, row.maiden_name]
+    .map((value) => normalizeSearchValue(value))
+    .filter(Boolean);
+
+  return normalizedQueryTokens.every((token) => searchableValues.some((value) => value.includes(token)));
 }
 
 function normalizeSearchValue(value: string | null | undefined): string {
   return (value ?? "").trim().toLocaleLowerCase("uk-UA");
+}
+
+function tokenizeSearchQuery(query: string): string[] {
+  return query
+    .split(/\s+/u)
+    .map((token) => normalizeSearchValue(token))
+    .filter((token) => token.length > 0);
 }
 
 function createCandidateKey(row: RegistrationCandidateRow): string {
