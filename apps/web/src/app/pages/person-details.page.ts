@@ -1175,7 +1175,7 @@ export class PersonDetailsPageComponent {
     this.isOwnProfile.set(false);
 
     try {
-      const persons = await awaitOne<Person[]>(this.personsService.list());
+      const persons = await awaitOne<Person[]>(this.personsService.listAllPersons());
       const person = await awaitOne<Person>(this.personsService.get(personId));
       const relationships = await awaitOne<Relationship[]>(this.relationshipsService.list(personId));
 

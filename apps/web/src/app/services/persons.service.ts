@@ -14,6 +14,10 @@ export class PersonsService {
     return this.api.get<Person[]>("/persons");
   }
 
+  listAllPersons() {
+    return this.api.get<Person[]>("/persons", { all: 1 });
+  }
+
   listAll(params: { q?: string; page?: number; pageSize?: number }) {
     return this.api.get<PaginatedResult<Person>>("/persons", params);
   }

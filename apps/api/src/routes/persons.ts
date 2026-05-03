@@ -9,6 +9,7 @@ import {
   grantPersonPermission,
   isUserAdmin,
   listAllPersonsPage,
+  listPersons,
 } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
 import { normalizeCreatePersonDto, normalizeUpdatePersonDto, toDbBoolean } from "../lib/normalize";
@@ -20,6 +21,10 @@ import {
 import type { Env } from "../types";
 
 export async function getPersons(url: URL, env: Env, currentUser: SessionUser): Promise<Response> {
+  if (url.searchParams.get("all") === "1") {
+    return json(await listPersons(env.DB, currentUser.id));
+  }
+
   const query = url.searchParams.get("q")?.trim() ?? "";
   const page = normalizePage(url.searchParams.get("page"), 1);
   const pageSize = normalizePageSize(url.searchParams.get("pageSize"), 12);

@@ -947,7 +947,7 @@ export class TreePageComponent {
 
   private async loadPersons(): Promise<void> {
     try {
-      const persons = (await awaitOne<Person[]>(this.personsService.list())).sort((left, right) =>
+      const persons = (await awaitOne<Person[]>(this.personsService.listAllPersons())).sort((left, right) =>
         this.displayName(left).localeCompare(this.displayName(right), "uk"),
       );
       this.persons.set(persons);
