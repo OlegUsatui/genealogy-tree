@@ -121,6 +121,83 @@ export async function listPersons(db: D1Database, userId: string): Promise<Perso
   return getPersonsByIds(db, userId, personIds);
 }
 
+export async function listAllPersonsPage(
+  db: D1Database,
+  userId: string,
+  params: {
+    query: string;
+    page: number;
+    pageSize: number;
+  },
+): Promise<{ items: Person[]; totalItems: number }> {
+  const normalizedQuery = normalizeSearchValue(params.query);
+  const page = Math.max(1, Math.floor(params.page));
+  const pageSize = Math.max(1, Math.min(50, Math.floor(params.pageSize)));
+  const offset = (page - 1) * pageSize;
+  const editablePersonIds = await listEditablePersonIds(db, userId);
+
+  const rows = await db
+    .prepare(
+      `
+        SELECT *
+        FROM global_persons
+        WHERE
+          ? = ''
+          OR LOWER(first_name) LIKE ?
+          OR LOWER(COALESCE(last_name, '')) LIKE ?
+          OR LOWER(COALESCE(middle_name, '')) LIKE ?
+          OR LOWER(COALESCE(maiden_name, '')) LIKE ?
+          OR LOWER(COALESCE(birth_place, '')) LIKE ?
+          OR LOWER(COALESCE(death_place, '')) LIKE ?
+        ORDER BY COALESCE(last_name, ''), first_name, birth_date, id
+        LIMIT ? OFFSET ?
+      `,
+    )
+    .bind(
+      normalizedQuery,
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      pageSize,
+      offset,
+    )
+    .all<PersonRow>();
+
+  const totalRow = await db
+    .prepare(
+      `
+        SELECT COUNT(*) AS count
+        FROM global_persons
+        WHERE
+          ? = ''
+          OR LOWER(first_name) LIKE ?
+          OR LOWER(COALESCE(last_name, '')) LIKE ?
+          OR LOWER(COALESCE(middle_name, '')) LIKE ?
+          OR LOWER(COALESCE(maiden_name, '')) LIKE ?
+          OR LOWER(COALESCE(birth_place, '')) LIKE ?
+          OR LOWER(COALESCE(death_place, '')) LIKE ?
+      `,
+    )
+    .bind(
+      normalizedQuery,
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+      likePattern(normalizedQuery),
+    )
+    .first<CountRow>();
+
+  return {
+    items: rows.results.map((row) => mapPersonRow(row, editablePersonIds.includes(row.id))),
+    totalItems: Number(totalRow?.count ?? 0),
+  };
+}
+
 export async function getPersonsByIds(
   db: D1Database,
   userId: string,
@@ -472,6 +549,14 @@ export async function findDuplicatePersonByIdentity(
 
 function createPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function normalizeSearchValue(value: string): string {
+  return value.trim().toLocaleLowerCase("uk-UA");
+}
+
+function likePattern(value: string): string {
+  return `%${value}%`;
 }
 
 async function getPrimaryPersonId(db: D1Database, userId: string): Promise<string | null> {

@@ -119,7 +119,7 @@ async function routeRequest(
   }
 
   if (request.method === "GET" && pathname === "/api/persons") {
-    return getPersons(env, requireAuthenticatedUser(currentUser));
+    return getPersons(url, env, requireAuthenticatedUser(currentUser));
   }
 
   if (request.method === "GET" && pathname === "/api/persons/duplicate-check") {

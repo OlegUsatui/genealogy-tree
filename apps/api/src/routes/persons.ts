@@ -8,7 +8,7 @@ import {
   getPersonByIdGlobal,
   grantPersonPermission,
   isUserAdmin,
-  listPersons,
+  listAllPersonsPage,
 } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
 import { normalizeCreatePersonDto, normalizeUpdatePersonDto, toDbBoolean } from "../lib/normalize";
@@ -19,9 +19,23 @@ import {
 } from "../lib/person-duplicates";
 import type { Env } from "../types";
 
-export async function getPersons(env: Env, currentUser: SessionUser): Promise<Response> {
-  const persons = await listPersons(env.DB, currentUser.id);
-  return json(persons);
+export async function getPersons(url: URL, env: Env, currentUser: SessionUser): Promise<Response> {
+  const query = url.searchParams.get("q")?.trim() ?? "";
+  const page = normalizePage(url.searchParams.get("page"), 1);
+  const pageSize = normalizePageSize(url.searchParams.get("pageSize"), 12);
+  const result = await listAllPersonsPage(env.DB, currentUser.id, {
+    query,
+    page,
+    pageSize,
+  });
+
+  return json({
+    items: result.items,
+    page,
+    pageSize,
+    totalItems: result.totalItems,
+    totalPages: Math.max(1, Math.ceil(result.totalItems / pageSize)),
+  });
 }
 
 export async function checkDuplicatePerson(url: URL, env: Env): Promise<Response> {
@@ -72,6 +86,21 @@ export async function getDirectoryPerson(
   personId: string,
 ): Promise<Response> {
   return getPerson(env, currentUser, personId);
+}
+
+function normalizePage(value: string | null, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function normalizePageSize(value: string | null, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(50, Math.floor(parsed)));
 }
 
 export async function importDirectoryPerson(

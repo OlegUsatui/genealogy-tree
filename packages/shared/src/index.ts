@@ -118,6 +118,14 @@ export interface PersonSearchCandidate {
   isLiving: boolean | null;
 }
 
+export interface PaginatedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
 export interface DuplicatePersonMatch {
   personId: string;
   personName: string | null;

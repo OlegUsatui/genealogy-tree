@@ -1,4 +1,4 @@
-import type { CreatePersonDto, DuplicatePersonCheckResponse, Person, UpdatePersonDto } from "@family-tree/shared";
+import type { CreatePersonDto, DuplicatePersonCheckResponse, PaginatedResult, Person, UpdatePersonDto } from "@family-tree/shared";
 
 import { Injectable, inject } from "@angular/core";
 
@@ -12,6 +12,10 @@ export class PersonsService {
 
   list() {
     return this.api.get<Person[]>("/persons");
+  }
+
+  listAll(params: { q?: string; page?: number; pageSize?: number }) {
+    return this.api.get<PaginatedResult<Person>>("/persons", params);
   }
 
   get(personId: string) {
