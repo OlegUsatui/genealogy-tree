@@ -9,7 +9,7 @@ import {
   grantPersonPermission,
   isUserAdmin,
   listAllPersonsPage,
-  listPersons,
+  listAllPersons,
 } from "../lib/db";
 import { HttpError, json, noContent, readJson } from "../lib/http";
 import { normalizeCreatePersonDto, normalizeUpdatePersonDto, toDbBoolean } from "../lib/normalize";
@@ -22,7 +22,7 @@ import type { Env } from "../types";
 
 export async function getPersons(url: URL, env: Env, currentUser: SessionUser): Promise<Response> {
   if (url.searchParams.get("all") === "1") {
-    return json(await listPersons(env.DB, currentUser.id));
+    return json(await listAllPersons(env.DB));
   }
 
   const query = url.searchParams.get("q")?.trim() ?? "";

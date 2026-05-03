@@ -121,6 +121,20 @@ export async function listPersons(db: D1Database, userId: string): Promise<Perso
   return getPersonsByIds(db, userId, personIds);
 }
 
+export async function listAllPersons(db: D1Database): Promise<Person[]> {
+  const result = await db
+    .prepare(
+      `
+        SELECT *
+        FROM global_persons
+        ORDER BY COALESCE(last_name, ''), first_name, birth_date, id
+      `,
+    )
+    .all<PersonRow>();
+
+  return result.results.map((row) => mapPersonRow(row));
+}
+
 export async function listAllPersonsPage(
   db: D1Database,
   userId: string,
