@@ -520,7 +520,7 @@ import { SearchService } from "../services/search.service";
       }
 
       .detail-item span {
-        color: var(--muted);
+        color: var(--muted-foreground);
         font-size: 13px;
       }
 
@@ -911,13 +911,16 @@ export class PersonDetailsPageComponent {
 
   relationshipCandidates(): Person[] {
     const candidatesById = new Map<string, Person>();
+    const excludedIds = this.excludedRelationshipCandidateIds();
 
     for (const candidate of this.localRelationshipCandidates()) {
-      candidatesById.set(candidate.id, candidate);
+      if (!excludedIds.has(candidate.id)) {
+        candidatesById.set(candidate.id, candidate);
+      }
     }
 
     for (const candidate of this.relationshipSearchResults()) {
-      if (!candidatesById.has(candidate.id)) {
+      if (!candidatesById.has(candidate.id) && !excludedIds.has(candidate.id)) {
         candidatesById.set(candidate.id, candidate);
       }
     }
@@ -926,17 +929,20 @@ export class PersonDetailsPageComponent {
   }
 
   filteredRelationshipCandidates(): Person[] {
+    const excludedIds = this.excludedRelationshipCandidateIds();
     const query = this.relationshipForm.controls.relatedPersonQuery.value.trim().toLocaleLowerCase("uk");
 
     if (!query) {
-      return this.localRelationshipCandidates();
+      return this.localRelationshipCandidates().filter((candidate) => !excludedIds.has(candidate.id));
     }
 
     if (query.length < 3) {
-      return this.filterRelationshipCandidates(this.localRelationshipCandidates(), query);
+      return this.filterRelationshipCandidates(this.localRelationshipCandidates(), query).filter(
+        (candidate) => !excludedIds.has(candidate.id),
+      );
     }
 
-    return this.relationshipSearchResults();
+    return this.relationshipSearchResults().filter((candidate) => !excludedIds.has(candidate.id));
   }
 
   showRelationshipSearchEmptyState(): boolean {
@@ -953,6 +959,23 @@ export class PersonDetailsPageComponent {
     }
 
     return this.allPersons().filter((candidate) => candidate.id !== currentId && candidate.canEdit === true);
+  }
+
+  private excludedRelationshipCandidateIds(): Set<string> {
+    const currentId = this.person()?.id;
+
+    if (!currentId) {
+      return new Set<string>();
+    }
+
+    const excludedIds = new Set<string>([currentId]);
+
+    for (const relationship of this.relationships()) {
+      excludedIds.add(relationship.person1Id);
+      excludedIds.add(relationship.person2Id);
+    }
+
+    return excludedIds;
   }
 
   selectedRelationshipGroup(): RelationshipGroup {
@@ -1473,7 +1496,8 @@ export class PersonDetailsPageComponent {
       const results = candidates
         .map((candidate) => this.mapSearchCandidateToPerson(candidate))
         .filter((candidate) => candidate.id !== this.person()?.id)
-        .filter((candidate) => allowedIds === null || allowedIds.has(candidate.id));
+        .filter((candidate) => allowedIds === null || allowedIds.has(candidate.id))
+        .filter((candidate) => !this.excludedRelationshipCandidateIds().has(candidate.id));
 
       this.relationshipSearchResults.set(results);
       this.syncRelationshipAutocompletePanel();

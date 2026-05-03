@@ -51,6 +51,8 @@ type AdminRow = {
   is_admin: number | null;
 };
 
+const D1_MAX_BOUND_PARAMETERS = 100;
+
 export function mapPersonRow(row: PersonRow, canEdit = false): Person {
   return {
     id: row.id,
@@ -131,16 +133,21 @@ export async function getPersonsByIds(
   }
 
   const uniqueIds = [...new Set(personIds)];
-  const placeholders = createPlaceholders(uniqueIds.length);
-  const result = await db
-    .prepare(
-      `SELECT * FROM global_persons WHERE id IN (${placeholders}) ORDER BY COALESCE(last_name, ''), first_name`,
-    )
-    .bind(...uniqueIds)
-    .all<PersonRow>();
-  const editableIds = await listEditablePersonIds(db, userId, uniqueIds);
+  const rows: PersonRow[] = [];
 
-  return result.results.map((row) => mapPersonRow(row, editableIds.includes(row.id)));
+  for (const idsChunk of chunkByD1Limit(uniqueIds)) {
+    const placeholders = createPlaceholders(idsChunk.length);
+    const result = await db
+      .prepare(`SELECT * FROM global_persons WHERE id IN (${placeholders})`)
+      .bind(...idsChunk)
+      .all<PersonRow>();
+
+    rows.push(...result.results);
+  }
+
+  const editableIds = new Set(await listEditablePersonIds(db, userId, uniqueIds));
+
+  return sortPersonRows(rows).map((row) => mapPersonRow(row, editableIds.has(row.id)));
 }
 
 export async function listRelationshipsByPersonId(
@@ -186,13 +193,19 @@ export async function personsExist(db: D1Database, userId: string, personIds: st
     return false;
   }
 
-  const placeholders = createPlaceholders(uniqueIds.length);
-  const row = await db
-    .prepare(`SELECT COUNT(*) AS count FROM global_persons WHERE id IN (${placeholders})`)
-    .bind(...uniqueIds)
-    .first<CountRow>();
+  let total = 0;
 
-  return Number(row?.count ?? 0) === uniqueIds.length;
+  for (const idsChunk of chunkByD1Limit(uniqueIds)) {
+    const placeholders = createPlaceholders(idsChunk.length);
+    const row = await db
+      .prepare(`SELECT COUNT(*) AS count FROM global_persons WHERE id IN (${placeholders})`)
+      .bind(...idsChunk)
+      .first<CountRow>();
+
+    total += Number(row?.count ?? 0);
+  }
+
+  return total === uniqueIds.length;
 }
 
 export async function getParentRelationshipsForChildren(
@@ -205,19 +218,25 @@ export async function getParentRelationshipsForChildren(
     return [];
   }
 
-  const result = await db
-    .prepare(
-      `
-        SELECT *
-        FROM global_relationships
-        WHERE type = 'parent_child'
-          AND person2_id IN (${createPlaceholders(childIds.length)})
-      `,
-    )
-    .bind(...childIds)
-    .all<RelationshipRow>();
+  const rows: RelationshipRow[] = [];
 
-  return result.results.map(mapRelationshipRow);
+  for (const idsChunk of chunkByD1Limit([...new Set(childIds)])) {
+    const result = await db
+      .prepare(
+        `
+          SELECT *
+          FROM global_relationships
+          WHERE type = 'parent_child'
+            AND person2_id IN (${createPlaceholders(idsChunk.length)})
+        `,
+      )
+      .bind(...idsChunk)
+      .all<RelationshipRow>();
+
+    rows.push(...result.results);
+  }
+
+  return sortRelationshipRows(rows).map(mapRelationshipRow);
 }
 
 export async function getChildRelationshipsForParents(
@@ -230,19 +249,25 @@ export async function getChildRelationshipsForParents(
     return [];
   }
 
-  const result = await db
-    .prepare(
-      `
-        SELECT *
-        FROM global_relationships
-        WHERE type = 'parent_child'
-          AND person1_id IN (${createPlaceholders(parentIds.length)})
-      `,
-    )
-    .bind(...parentIds)
-    .all<RelationshipRow>();
+  const rows: RelationshipRow[] = [];
 
-  return result.results.map(mapRelationshipRow);
+  for (const idsChunk of chunkByD1Limit([...new Set(parentIds)])) {
+    const result = await db
+      .prepare(
+        `
+          SELECT *
+          FROM global_relationships
+          WHERE type = 'parent_child'
+            AND person1_id IN (${createPlaceholders(idsChunk.length)})
+        `,
+      )
+      .bind(...idsChunk)
+      .all<RelationshipRow>();
+
+    rows.push(...result.results);
+  }
+
+  return sortRelationshipRows(rows).map(mapRelationshipRow);
 }
 
 export async function getSpouseRelationshipsForPersons(
@@ -255,20 +280,28 @@ export async function getSpouseRelationshipsForPersons(
     return [];
   }
 
-  const placeholders = createPlaceholders(personIds.length);
-  const result = await db
-    .prepare(
-      `
-        SELECT *
-        FROM global_relationships
-        WHERE type = 'spouse'
-          AND (person1_id IN (${placeholders}) OR person2_id IN (${placeholders}))
-      `,
-    )
-    .bind(...personIds, ...personIds)
-    .all<RelationshipRow>();
+  const rowsById = new Map<string, RelationshipRow>();
 
-  return result.results.map(mapRelationshipRow);
+  for (const idsChunk of chunkByD1Limit([...new Set(personIds)], 2)) {
+    const placeholders = createPlaceholders(idsChunk.length);
+    const result = await db
+      .prepare(
+        `
+          SELECT *
+          FROM global_relationships
+          WHERE type = 'spouse'
+            AND (person1_id IN (${placeholders}) OR person2_id IN (${placeholders}))
+        `,
+      )
+      .bind(...idsChunk, ...idsChunk)
+      .all<RelationshipRow>();
+
+    for (const row of result.results) {
+      rowsById.set(row.id, row);
+    }
+  }
+
+  return sortRelationshipRows([...rowsById.values()]).map(mapRelationshipRow);
 }
 
 export async function getConnectedFamilyGraph(
@@ -287,24 +320,31 @@ export async function getConnectedFamilyGraph(
     };
   }
 
-  const placeholders = createPlaceholders(personIds.length);
-  const relationshipsResult = await db
-    .prepare(
-      `
-        SELECT *
-        FROM global_relationships
-        WHERE person1_id IN (${placeholders})
-          OR person2_id IN (${placeholders})
-        ORDER BY created_at
-      `,
-    )
-    .bind(...personIds, ...personIds)
-    .all<RelationshipRow>();
+  const rowsById = new Map<string, RelationshipRow>();
+
+  for (const idsChunk of chunkByD1Limit([...new Set(personIds)], 2)) {
+    const placeholders = createPlaceholders(idsChunk.length);
+    const relationshipsResult = await db
+      .prepare(
+        `
+          SELECT *
+          FROM global_relationships
+          WHERE person1_id IN (${placeholders})
+            OR person2_id IN (${placeholders})
+        `,
+      )
+      .bind(...idsChunk, ...idsChunk)
+      .all<RelationshipRow>();
+
+    for (const row of relationshipsResult.results) {
+      rowsById.set(row.id, row);
+    }
+  }
 
   return {
     focusPersonId,
     persons,
-    relationships: relationshipsResult.results.map(mapRelationshipRow),
+    relationships: sortRelationshipRows([...rowsById.values()]).map(mapRelationshipRow),
   };
 }
 
@@ -345,21 +385,27 @@ export async function canEditAnyPerson(
     return false;
   }
 
-  const placeholders = createPlaceholders(uniqueIds.length);
-  const row = await db
-    .prepare(
-      `
-        SELECT COUNT(*) AS count
-        FROM person_permissions
-        WHERE user_id = ?
-          AND role IN ('owner', 'editor')
-          AND person_id IN (${placeholders})
-      `,
-    )
-    .bind(userId, ...uniqueIds)
-    .first<CountRow>();
+  for (const idsChunk of chunkByD1Limit(uniqueIds, 1, 1)) {
+    const placeholders = createPlaceholders(idsChunk.length);
+    const row = await db
+      .prepare(
+        `
+          SELECT COUNT(*) AS count
+          FROM person_permissions
+          WHERE user_id = ?
+            AND role IN ('owner', 'editor')
+            AND person_id IN (${placeholders})
+        `,
+      )
+      .bind(userId, ...idsChunk)
+      .first<CountRow>();
 
-  return Number(row?.count ?? 0) > 0;
+    if (Number(row?.count ?? 0) > 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export async function grantPersonPermission(
@@ -474,6 +520,47 @@ function createPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
+function chunkByD1Limit<T>(values: T[], repeatedLists = 1, reservedBindings = 0): T[][] {
+  const maxChunkSize = Math.floor((D1_MAX_BOUND_PARAMETERS - reservedBindings) / repeatedLists);
+
+  if (maxChunkSize < 1) {
+    throw new Error("Неможливо підібрати chunk size під ліміт D1 bound parameters.");
+  }
+
+  return chunkArray(values, maxChunkSize);
+}
+
+function chunkArray<T>(values: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
+function sortPersonRows(rows: PersonRow[]): PersonRow[] {
+  return [...rows].sort((left, right) => {
+    return (
+      compareNullableText(left.last_name, right.last_name) ||
+      left.first_name.localeCompare(right.first_name, "uk") ||
+      compareNullableText(left.birth_date, right.birth_date) ||
+      left.id.localeCompare(right.id)
+    );
+  });
+}
+
+function sortRelationshipRows(rows: RelationshipRow[]): RelationshipRow[] {
+  return [...rows].sort((left, right) => {
+    return left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id);
+  });
+}
+
+function compareNullableText(left: string | null | undefined, right: string | null | undefined): number {
+  return (left ?? "").localeCompare(right ?? "", "uk");
+}
+
 async function getPrimaryPersonId(db: D1Database, userId: string): Promise<string | null> {
   const row = await db
     .prepare("SELECT primary_person_id FROM users WHERE id = ?")
@@ -501,20 +588,44 @@ async function listEditablePersonIds(
     return result.results.map((row) => row.person_id);
   }
 
-  const scopedClause = personIds ? ` AND person_id IN (${createPlaceholders(personIds.length)})` : "";
-  const result = await db
-    .prepare(
-      `
-        SELECT person_id
-        FROM person_permissions
-        WHERE user_id = ?
-          AND role IN ('owner', 'editor')${scopedClause}
-      `,
-    )
-    .bind(userId, ...(personIds ?? []))
-    .all<PermissionRow>();
+  if (!personIds) {
+    const result = await db
+      .prepare(
+        `
+          SELECT person_id
+          FROM person_permissions
+          WHERE user_id = ?
+            AND role IN ('owner', 'editor')
+        `,
+      )
+      .bind(userId)
+      .all<PermissionRow>();
 
-  return result.results.map((row) => row.person_id);
+    return result.results.map((row) => row.person_id);
+  }
+
+  const editableIds = new Set<string>();
+
+  for (const idsChunk of chunkByD1Limit([...new Set(personIds)], 1, 1)) {
+    const result = await db
+      .prepare(
+        `
+          SELECT person_id
+          FROM person_permissions
+          WHERE user_id = ?
+            AND role IN ('owner', 'editor')
+            AND person_id IN (${createPlaceholders(idsChunk.length)})
+        `,
+      )
+      .bind(userId, ...idsChunk)
+      .all<PermissionRow>();
+
+    for (const row of result.results) {
+      editableIds.add(row.person_id);
+    }
+  }
+
+  return [...editableIds];
 }
 
 async function listConnectedPersonIds(db: D1Database, rootPersonId: string): Promise<string[]> {

@@ -414,7 +414,7 @@ import { PersonsService } from "./services/persons.service";
       }
 
       .account-email {
-        color: var(--muted);
+        color: var(--muted-foreground);
         font-size: 12px;
         line-height: 1.2;
         overflow: hidden;
@@ -423,7 +423,7 @@ import { PersonsService } from "./services/persons.service";
       }
 
       .active-link {
-        color: var(--accent) !important;
+        color: var(--accent-foreground) !important;
       }
 
       @keyframes loader-float {
@@ -633,7 +633,7 @@ import { PersonsService } from "./services/persons.service";
         }
 
         .mobile-drawer-kicker {
-          color: var(--muted);
+          color: var(--muted-foreground);
           font-size: 12px;
           letter-spacing: 0.08em;
           text-transform: uppercase;

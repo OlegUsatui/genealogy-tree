@@ -368,7 +368,7 @@ import { MATERIAL_IMPORTS } from "../material";
       }
 
       .person-info-card span {
-        color: var(--muted);
+        color: var(--muted-foreground);
         font-size: 12px;
       }
 

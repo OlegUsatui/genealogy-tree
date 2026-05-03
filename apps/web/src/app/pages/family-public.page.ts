@@ -737,7 +737,7 @@ type QuickAddMenuState = {
       .match-option-meta,
       .candidate-meta {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--muted-foreground);
       }
 
       .candidate-option {

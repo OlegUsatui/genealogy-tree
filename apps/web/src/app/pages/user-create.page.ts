@@ -339,7 +339,7 @@ type LivingOption = "unknown" | "true" | "false";
 
       .match-option-meta {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--muted-foreground);
       }
 
       .match-option-action {

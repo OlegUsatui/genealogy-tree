@@ -77,6 +77,8 @@ type CreateFamilySpaceInput = {
   title?: string | null;
 };
 
+const D1_MAX_BOUND_PARAMETERS = 100;
+
 export async function createFamilyShare(
   request: Request,
   env: Env,
@@ -435,36 +437,48 @@ async function getFamilySpaceByToken(db: D1Database, token: string): Promise<Fam
 
 async function buildConnectedTreeResponse(db: D1Database, rootPersonId: string): Promise<TreeResponse> {
   const personIds = await listConnectedPersonIds(db, rootPersonId);
+  const uniquePersonIds = [...new Set(personIds)];
+  const personRows: PersonRow[] = [];
 
-  const personsResult = await db
-    .prepare(
-      `
-        SELECT *
-        FROM global_persons
-        WHERE id IN (${createPlaceholders(personIds.length)})
-        ORDER BY COALESCE(last_name, ''), first_name, birth_date, id
-      `,
-    )
-    .bind(...personIds)
-    .all<PersonRow>();
+  for (const idsChunk of chunkByD1Limit(uniquePersonIds)) {
+    const personsResult = await db
+      .prepare(
+        `
+          SELECT *
+          FROM global_persons
+          WHERE id IN (${createPlaceholders(idsChunk.length)})
+        `,
+      )
+      .bind(...idsChunk)
+      .all<PersonRow>();
 
-  const relationshipsResult = await db
-    .prepare(
-      `
-        SELECT *
-        FROM global_relationships
-        WHERE person1_id IN (${createPlaceholders(personIds.length)})
-           OR person2_id IN (${createPlaceholders(personIds.length)})
-        ORDER BY created_at
-      `,
-    )
-    .bind(...personIds, ...personIds)
-    .all<RelationshipRow>();
+    personRows.push(...personsResult.results);
+  }
+
+  const relationshipRowsById = new Map<string, RelationshipRow>();
+
+  for (const idsChunk of chunkByD1Limit(uniquePersonIds, 2)) {
+    const relationshipsResult = await db
+      .prepare(
+        `
+          SELECT *
+          FROM global_relationships
+          WHERE person1_id IN (${createPlaceholders(idsChunk.length)})
+             OR person2_id IN (${createPlaceholders(idsChunk.length)})
+        `,
+      )
+      .bind(...idsChunk, ...idsChunk)
+      .all<RelationshipRow>();
+
+    for (const row of relationshipsResult.results) {
+      relationshipRowsById.set(row.id, row);
+    }
+  }
 
   return {
     rootPersonId,
-    persons: personsResult.results.map((row) => mapPersonRow(row, false)),
-    relationships: relationshipsResult.results.map(mapRelationshipRow),
+    persons: sortPersonRows(personRows).map((row) => mapPersonRow(row, false)),
+    relationships: sortRelationshipRows([...relationshipRowsById.values()]).map(mapRelationshipRow),
   };
 }
 
@@ -704,4 +718,45 @@ function createPlaceholders(count: number): string {
   }
 
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function chunkByD1Limit<T>(values: T[], repeatedLists = 1, reservedBindings = 0): T[][] {
+  const maxChunkSize = Math.floor((D1_MAX_BOUND_PARAMETERS - reservedBindings) / repeatedLists);
+
+  if (maxChunkSize < 1) {
+    throw new HttpError(500, "Неможливо підібрати chunk size під ліміт D1 bound parameters");
+  }
+
+  return chunkArray(values, maxChunkSize);
+}
+
+function chunkArray<T>(values: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
+function sortPersonRows(rows: PersonRow[]): PersonRow[] {
+  return [...rows].sort((left, right) => {
+    return (
+      compareNullableText(left.last_name, right.last_name) ||
+      left.first_name.localeCompare(right.first_name, "uk") ||
+      compareNullableText(left.birth_date, right.birth_date) ||
+      left.id.localeCompare(right.id)
+    );
+  });
+}
+
+function sortRelationshipRows(rows: RelationshipRow[]): RelationshipRow[] {
+  return [...rows].sort((left, right) => {
+    return left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id);
+  });
+}
+
+function compareNullableText(left: string | null | undefined, right: string | null | undefined): number {
+  return (left ?? "").localeCompare(right ?? "", "uk");
 }

@@ -69,7 +69,7 @@ import { AuthService } from "../services/auth.service";
 
       .login-copy p {
         max-width: 44ch;
-        color: var(--muted);
+        color: var(--muted-foreground);
       }
 
       .login-form {

@@ -36,6 +36,8 @@ type RelationshipRow = {
   created_at: string;
 };
 
+const D1_MAX_BOUND_PARAMETERS = 100;
+
 export async function getCanonicalPersonRowByAnyId(
   db: D1Database,
   personId: string,
@@ -501,21 +503,29 @@ async function listAffectedUserIdsByCanonicalIds(db: D1Database, canonicalIds: s
     return [];
   }
 
-  const placeholders = createPlaceholders(uniqueCanonicalIds.length);
-  const result = await db
-    .prepare(
-      `
-        SELECT DISTINCT user_id
-        FROM persons
-        WHERE id IN (${placeholders})
-          OR source_person_id IN (${placeholders})
-        ORDER BY user_id
-      `,
-    )
-    .bind(...uniqueCanonicalIds, ...uniqueCanonicalIds)
-    .all<{ user_id: string }>();
+  const userIds = new Set<string>();
 
-  return result.results.map((row) => row.user_id);
+  for (const idsChunk of chunkByD1Limit(uniqueCanonicalIds, 2)) {
+    const placeholders = createPlaceholders(idsChunk.length);
+    const result = await db
+      .prepare(
+        `
+          SELECT DISTINCT user_id
+          FROM persons
+          WHERE id IN (${placeholders})
+            OR source_person_id IN (${placeholders})
+          ORDER BY user_id
+        `,
+      )
+      .bind(...idsChunk, ...idsChunk)
+      .all<{ user_id: string }>();
+
+    for (const row of result.results) {
+      userIds.add(row.user_id);
+    }
+  }
+
+  return [...userIds].sort((left, right) => left.localeCompare(right));
 }
 
 async function ensureCanonicalPersonAvailableInUser(
@@ -638,6 +648,26 @@ function getCanonicalPersonId(person: Pick<PersonRow, "id" | "source_person_id">
 
 function createPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function chunkByD1Limit<T>(values: T[], repeatedLists = 1, reservedBindings = 0): T[][] {
+  const maxChunkSize = Math.floor((D1_MAX_BOUND_PARAMETERS - reservedBindings) / repeatedLists);
+
+  if (maxChunkSize < 1) {
+    throw new Error("Неможливо підібрати chunk size під ліміт D1 bound parameters.");
+  }
+
+  return chunkArray(values, maxChunkSize);
+}
+
+function chunkArray<T>(values: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+
+  return chunks;
 }
 
 function collectConnectedPersonIds(rootPersonId: string, relationships: RelationshipRow[]): Set<string> {

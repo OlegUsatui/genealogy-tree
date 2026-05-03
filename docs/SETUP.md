@@ -118,3 +118,4 @@ Web буде доступний на `http://localhost:4200`.
 - Немає Cloudflare Pages/Workers CI-конфігурації.
 - Немає production-ready hardening для auth cookie та секретів.
 - Візуалізація дерева навмисно проста, без drag-and-drop editor.
+- Додати посилання на соц мережі
